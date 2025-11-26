@@ -11,6 +11,7 @@ import Link from "next/link";
 import { ArrowRight, ArrowLeft, CheckCircle2, Cloud, Terminal, FileText, Copy, Check } from "lucide-react";
 
 const SPOTSAVE_ACCOUNT_ID = "236763662741"; // This would come from env in production
+const CLOUDFORMATION_TEMPLATE_URL = "https://raw.githubusercontent.com/utkarshp845/spot-saves/main/cloudformation/spotsave-role.yaml";
 
 type SetupMethod = "cloudformation" | "cloudshell" | "manual";
 
@@ -161,7 +162,7 @@ export default function OnboardingPage() {
   };
 
   const renderCloudFormationInstructions = () => {
-    const cloudformationUrl = `https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://raw.githubusercontent.com/utkarshp845/spot-saves/main/cloudformation/spotsave-role.yaml&param_SpotSaveAccountId=${SPOTSAVE_ACCOUNT_ID}`;
+    const cloudformationUrl = `https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=${encodeURIComponent(CLOUDFORMATION_TEMPLATE_URL)}&param_SpotSaveAccountId=${SPOTSAVE_ACCOUNT_ID}`;
     
     return (
       <div className="space-y-6">
