@@ -1,0 +1,102 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'SpotSave Read-Only IAM Role - Allows SpotSave to scan your AWS account for cost savings opportunities'
+
+Parameters:
+  SpotSaveAccountId:
+    Type: String
+    Description: Your SpotSave service account ID (provided by SpotSave)
+    Default: '236763662741'
+  
+  ExternalId:
+    Type: String
+    Description: Unique external ID for security (auto-generated)
+    Default: ''
+  
+  RoleName:
+    Type: String
+    Description: Name for the IAM role
+    Default: 'SpotSaveRole'
+
+Resources:
+  SpotSaveExternalId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/spotsave/${RoleName}/external-id'
+      Type: String
+      Value: !Sub |
+        {
+          "externalId": "${!If [HasExternalId, !Ref ExternalId, !Ref 'AWS::NoValue']}",
+          "generatedAt": "${!Ref 'AWS::Region'}"
+        }
+      Description: 'SpotSave External ID - Keep this secure'
+
+  SpotSaveRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref RoleName
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${SpotSaveAccountId}:root'
+            Action: 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                'sts:ExternalId': !If 
+                  - HasExternalId
+                  - !Ref ExternalId
+                  - !Ref 'AWS::NoValue'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/job-function/Billing'
+        - 'arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess'
+        - 'arn:aws:iam::aws:policy/AWSPriceListServiceFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonRDSReadOnlyAccess'
+        - 'arn:aws:iam::aws:policy/AWSLambda_ReadOnlyAccess'
+      Policies:
+        - PolicyName: SpotSaveCloudWatchRead
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'cloudwatch:GetMetricStatistics'
+                  - 'cloudwatch:ListMetrics'
+                  - 'cloudwatch:GetMetricData'
+                  - 'cloudwatch:DescribeAlarms'
+                Resource: '*'
+      Tags:
+        - Key: ManagedBy
+          Value: SpotSave
+        - Key: Purpose
+          Value: CostOptimizationScanning
+
+Conditions:
+  HasExternalId: !Not [!Equals [!Ref ExternalId, '']]
+
+Outputs:
+  RoleArn:
+    Description: 'IAM Role ARN - Use this in SpotSave'
+    Value: !GetAtt SpotSaveRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-RoleArn'
+  
+  ExternalId:
+    Description: 'External ID - Use this in SpotSave (Keep secure!)'
+    Value: !If 
+      - HasExternalId
+      - !Ref ExternalId
+      - !GetAtt SpotSaveExternalId.Value
+    Export:
+      Name: !Sub '${AWS::StackName}-ExternalId'
+  
+  SetupInstructions:
+    Description: 'Next steps'
+    Value: !Sub |
+      Setup Complete!
+      
+      1. Copy the Role ARN: ${SpotSaveRole.Arn}
+      2. Copy the External ID: ${!If [HasExternalId, !Ref ExternalId, 'Check CloudFormation Outputs']}
+      3. Go to your SpotSave dashboard
+      4. Enter these values to start scanning
+
