@@ -174,33 +174,104 @@ export default function OnboardingPage() {
         <Card>
           <CardHeader>
             <CardTitle>Step 1: Launch CloudFormation Stack</CardTitle>
-            <CardDescription>Click the button below to open AWS Console</CardDescription>
+            <CardDescription>Copy the template URL and paste it in AWS Console</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Template URL (copy this):</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={CLOUDFORMATION_TEMPLATE_URL}
+                  readOnly
+                  className="font-mono text-sm"
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(CLOUDFORMATION_TEMPLATE_URL);
+                    handleCopy("", "template-url");
+                  }}
+                >
+                  {copied === "template-url" ? (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copy
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+            
             <a 
-              href={cloudformationUrl}
+              href="https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create"
               target="_blank"
               rel="noopener noreferrer"
               className="block"
             >
               <Button className="w-full bg-blue-600 hover:bg-blue-700">
                 <Cloud className="mr-2 h-4 w-4" />
-                Launch CloudFormation Stack in AWS Console
+                Open CloudFormation Console
               </Button>
             </a>
-            <p className="text-sm text-gray-600">
-              This will open AWS Console in a new tab. The template is pre-filled with your SpotSave account ID.
-            </p>
+            
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-900 font-semibold mb-2">Instructions:</p>
+              <ol className="text-sm text-blue-800 list-decimal list-inside space-y-1">
+                <li>Click &quot;Open CloudFormation Console&quot; above</li>
+                <li>Select &quot;Template is ready&quot;</li>
+                <li>Choose &quot;Amazon S3 URL&quot; or &quot;Upload a template file&quot;</li>
+                <li>Paste the Template URL you copied above into the URL field</li>
+                <li>Click &quot;Next&quot; to continue</li>
+              </ol>
+            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Step 2: Create the Stack</CardTitle>
+            <CardTitle>Step 2: Configure Stack Parameters</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            <div className="space-y-2">
+              <Label>SpotSave Account ID:</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={SPOTSAVE_ACCOUNT_ID}
+                  readOnly
+                  className="font-mono text-sm"
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(SPOTSAVE_ACCOUNT_ID);
+                    handleCopy("", "account-id");
+                  }}
+                >
+                  {copied === "account-id" ? (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copy
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
             <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700">
-              <li>Review the template parameters (already filled in)</li>
+              <li>Enter the Stack name (e.g., &quot;SpotSaveRole&quot;)</li>
+              <li>Paste the SpotSave Account ID above: <code className="bg-gray-100 px-1 rounded">{SPOTSAVE_ACCOUNT_ID}</code></li>
+              <li>External ID: Leave empty (it will be auto-generated) or enter a custom value</li>
               <li>Scroll down and check &quot;I acknowledge that AWS CloudFormation might create IAM resources&quot;</li>
               <li>Click <strong>&quot;Submit&quot;</strong> or <strong>&quot;Create stack&quot;</strong></li>
               <li>Wait 1-2 minutes for the stack to create</li>
