@@ -173,60 +173,56 @@ export default function OnboardingPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Step 1: Launch CloudFormation Stack</CardTitle>
-            <CardDescription>Copy the template URL and paste it in AWS Console</CardDescription>
+            <CardTitle>Step 1: Download Template & Open CloudFormation</CardTitle>
+            <CardDescription>Download the template file and upload it to CloudFormation</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Template URL (copy this):</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={CLOUDFORMATION_TEMPLATE_URL}
-                  readOnly
-                  className="font-mono text-sm"
-                  onClick={(e) => (e.target as HTMLInputElement).select()}
-                />
-                <Button
-                  variant="outline"
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(CLOUDFORMATION_TEMPLATE_URL);
-                    handleCopy("", "template-url");
-                  }}
-                >
-                  {copied === "template-url" ? (
-                    <>
-                      <Check className="mr-2 h-4 w-4" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="mr-2 h-4 w-4" />
-                      Copy
-                    </>
-                  )}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+                onClick={async () => {
+                  try {
+                    const response = await fetch(CLOUDFORMATION_TEMPLATE_URL);
+                    const yamlContent = await response.text();
+                    const blob = new Blob([yamlContent], { type: 'application/x-yaml' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'spotsave-role.yaml';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  } catch (error) {
+                    console.error('Failed to download template:', error);
+                    alert('Failed to download template. Please try again.');
+                  }
+                }}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                Download Template File
+              </Button>
+              
+              <a 
+                href="https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1"
+              >
+                <Button variant="outline" className="w-full">
+                  <Cloud className="mr-2 h-4 w-4" />
+                  Open CloudFormation Console
                 </Button>
-              </div>
+              </a>
             </div>
             
-            <a 
-              href="https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block"
-            >
-              <Button className="w-full bg-blue-600 hover:bg-blue-700">
-                <Cloud className="mr-2 h-4 w-4" />
-                Open CloudFormation Console
-              </Button>
-            </a>
-            
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-              <p className="text-sm text-blue-900 font-semibold mb-2">Instructions:</p>
-              <ol className="text-sm text-blue-800 list-decimal list-inside space-y-1">
+            <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+              <p className="text-sm text-green-900 font-semibold mb-2">Simple Instructions:</p>
+              <ol className="text-sm text-green-800 list-decimal list-inside space-y-1">
+                <li>Click &quot;Download Template File&quot; above (downloads spotsave-role.yaml)</li>
                 <li>Click &quot;Open CloudFormation Console&quot; above</li>
-                <li>Select &quot;Template is ready&quot;</li>
-                <li>Choose &quot;Amazon S3 URL&quot; or &quot;Upload a template file&quot;</li>
-                <li>Paste the Template URL you copied above into the URL field</li>
+                <li>Select &quot;Template is ready&quot; → &quot;Upload a template file&quot;</li>
+                <li>Choose the downloaded spotsave-role.yaml file</li>
                 <li>Click &quot;Next&quot; to continue</li>
               </ol>
             </div>
