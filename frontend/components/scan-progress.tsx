@@ -111,9 +111,9 @@ export function ScanProgress({ scanId, onComplete }: ScanProgressProps) {
             <div>
               <CardTitle>Scan Progress</CardTitle>
               <CardDescription>
-                {progress.status === "running" && "Scanning your AWS account..."}
-                {progress.status === "completed" && "Scan completed successfully!"}
-                {progress.status === "failed" && "Scan failed"}
+                {progress.status === "running" && `Scanning your AWS account... Found ${progress.opportunities_found} opportunities so far`}
+                {progress.status === "completed" && "Scan completed successfully! View your savings below."}
+                {progress.status === "failed" && "Scan failed - please check your AWS connection"}
               </CardDescription>
             </div>
           </div>

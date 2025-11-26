@@ -138,5 +138,23 @@
   .pulse-slow {
     animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
+
+  /* Focus visible for accessibility */
+  *:focus-visible {
+    @apply outline-2 outline-offset-2 outline-green-500;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Better mobile tap targets */
+  @media (max-width: 768px) {
+    button, a, [role="button"] {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
 }
 

@@ -1,0 +1,82 @@
+# Production Docker Compose for Raspberry Pi 5
+# Use this file when deploying to production: docker compose -f docker-compose.prod.yml up -d
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      platforms:
+        - linux/arm64
+    container_name: spotsave-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./data/spotsave.db
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+    volumes:
+      - ./backend/data:/app/data
+      - ${AWS_CREDENTIALS_PATH:-/home/pi/.aws}:/root/.aws:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - spotsave-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      platforms:
+        - linux/arm64
+    container_name: spotsave-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-/api/backend}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - spotsave-network
+
+  cron:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.cron
+      platforms:
+        - linux/arm64
+    container_name: spotsave-cron
+    environment:
+      - DATABASE_URL=sqlite:///./data/spotsave.db
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+      - SCAN_SCHEDULE=${SCAN_SCHEDULE:-0 2 * * *}
+      - BACKEND_URL=http://backend:8000
+    volumes:
+      - ./backend/data:/app/data
+      - ${AWS_CREDENTIALS_PATH:-/home/pi/.aws}:/root/.aws:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - spotsave-network
+
+networks:
+  spotsave-network:
+    driver: bridge
+

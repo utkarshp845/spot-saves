@@ -24,6 +24,8 @@ export function AnimatedNumber({
 
   useEffect(() => {
     let startTime: number | null = null;
+    let animationFrame: number;
+    
     const startValue = displayValue;
     const difference = value - startValue;
 
@@ -42,13 +44,20 @@ export function AnimatedNumber({
       setDisplayValue(currentValue);
 
       if (progress < 1) {
-        requestAnimationFrame(animate);
+        animationFrame = requestAnimationFrame(animate);
       } else {
         setDisplayValue(value);
       }
     };
 
-    requestAnimationFrame(animate);
+    animationFrame = requestAnimationFrame(animate);
+    
+    return () => {
+      if (animationFrame) {
+        cancelAnimationFrame(animationFrame);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, duration]);
 
   const formattedValue = displayValue.toFixed(decimals);

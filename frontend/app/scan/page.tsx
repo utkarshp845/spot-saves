@@ -132,14 +132,19 @@ export default function ScanPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="border-b bg-white">
+      <header className="sticky top-0 z-40 border-b bg-white/80 backdrop-blur-md shadow-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/" className="text-2xl font-bold text-green-600">
+          <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent hover:scale-105 transition-transform duration-200">
             SpotSave
           </Link>
-          <Link href="/dashboard">
-            <Button variant="ghost">Dashboard</Button>
-          </Link>
+          <div className="flex gap-3">
+            <Link href="/dashboard">
+              <Button variant="ghost" className="hover:bg-green-50 hover:text-green-700 transition-colors">Dashboard</Button>
+            </Link>
+            <Link href="/onboarding">
+              <Button variant="ghost" className="hover:bg-green-50 hover:text-green-700 transition-colors">Setup Wizard</Button>
+            </Link>
+          </div>
         </div>
       </header>
 

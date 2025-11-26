@@ -130,11 +130,29 @@ function DashboardContent() {
 
   if (loading && !data) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p>Loading dashboard...</p>
-        </div>
+      <div className="min-h-screen bg-slate-50">
+        <header className="border-b bg-white">
+          <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+            <Link href="/" className="text-2xl font-bold text-green-600">
+              SpotSave
+            </Link>
+            <div className="flex gap-4">
+              <Link href="/scan">
+                <Button variant="ghost">New Scan</Button>
+              </Link>
+            </div>
+          </div>
+        </header>
+        <main className="container mx-auto px-4 py-8">
+          <div className="animate-pulse space-y-8">
+            <div className="h-32 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg"></div>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="h-64 bg-gray-200 rounded-lg"></div>
+              <div className="h-64 bg-gray-200 rounded-lg"></div>
+            </div>
+            <div className="h-96 bg-gray-200 rounded-lg"></div>
+          </div>
+        </main>
       </div>
     );
   }
@@ -167,10 +185,10 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="border-b bg-white">
+      <header className="sticky top-0 z-40 border-b bg-white/80 backdrop-blur-md shadow-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div>
-            <Link href="/" className="text-2xl font-bold text-green-600">
+            <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent hover:scale-105 transition-transform duration-200">
               SpotSave
             </Link>
             {data && data.aws_account_id && (
@@ -180,15 +198,19 @@ function DashboardContent() {
               </p>
             )}
           </div>
-          <div className="flex gap-4">
+          <div className="flex gap-3">
             <Link href="/scan">
-              <Button variant="ghost">New Scan</Button>
+              <Button variant="ghost" className="hover:bg-green-50 hover:text-green-700 transition-colors">New Scan</Button>
+            </Link>
+            <Link href="/onboarding">
+              <Button variant="ghost" className="hover:bg-green-50 hover:text-green-700 transition-colors">Setup</Button>
             </Link>
             {data && (
               <Button
                 onClick={handleRefresh}
                 disabled={loading}
                 variant="outline"
+                className="hover:bg-green-50 transition-colors"
               >
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

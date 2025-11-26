@@ -11,7 +11,7 @@ export default function HomePage() {
       {/* Header */}
       <header className="sticky top-0 z-40 border-b bg-white/80 backdrop-blur-md shadow-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent hover:scale-105 transition-transform duration-200">
+          <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent hover:scale-105 transition-transform duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 rounded">
             SpotSave
           </Link>
           <nav className="flex gap-3">
@@ -148,9 +148,44 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t py-8">
-        <div className="container mx-auto px-4 text-center text-gray-600">
-          <p>&copy; 2024 SpotSave. All rights reserved.</p>
+      <footer className="border-t bg-white mt-16">
+        <div className="container mx-auto px-4 py-12">
+          <div className="grid md:grid-cols-4 gap-8 mb-8">
+            <div>
+              <h3 className="text-lg font-bold text-green-600 mb-4">SpotSave</h3>
+              <p className="text-sm text-gray-600">
+                Find hidden AWS cost savings opportunities in minutes.
+              </p>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-4">Product</h4>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li><Link href="/demo" className="hover:text-green-600 transition-colors">View Demo</Link></li>
+                <li><Link href="/scan" className="hover:text-green-600 transition-colors">Quick Scan</Link></li>
+                <li><Link href="/onboarding" className="hover:text-green-600 transition-colors">Get Started</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-4">Features</h4>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li>Reserved Instances</li>
+                <li>Rightsizing</li>
+                <li>Idle Resources</li>
+                <li>Graviton Migration</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-4">Support</h4>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li>Read-Only Scanning</li>
+                <li>Results-First Pricing</li>
+                <li>2-Minute Setup</li>
+              </ul>
+            </div>
+          </div>
+          <div className="border-t pt-8 text-center text-sm text-gray-600">
+            <p>&copy; 2024 SpotSave. All rights reserved. Built with ❤️ for cost-conscious AWS users.</p>
+          </div>
         </div>
       </footer>
     </div>
