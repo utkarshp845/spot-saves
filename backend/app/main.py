@@ -6,9 +6,10 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse, Response
 from sqlmodel import Session, select
 
 from app.database import engine, init_db, get_session, check_migrations
@@ -20,7 +21,7 @@ from app.schemas import (
     ScanStatusResponse, DashboardResponse, SavingsOpportunityResponse,
     HealthResponse
 )
-from app.scanner import AWSScanner
+from app.scanner import AWSScanner, extract_aws_account_id
 from app.streaming import create_sse_response
 from app.notifications import send_scan_completion_email
 from app.share import ShareToken, create_share_token
@@ -53,6 +54,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Response compression for faster API responses
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 @app.post("/api/scan/{scan_id}/share")
@@ -172,7 +176,7 @@ async def health_check(session: Session = Depends(get_session)):
     return HealthResponse(
         status="healthy",
         database=db_status,
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
 
 
@@ -193,6 +197,7 @@ async def create_account(
         existing.account_name = account_data.account_name
         existing.external_id = account_data.external_id
         existing.is_active = True
+        existing.aws_account_id = extract_aws_account_id(account_data.role_arn)
         if user_id:
             existing.user_id = user_id
         session.add(existing)
@@ -200,9 +205,13 @@ async def create_account(
         session.refresh(existing)
         return existing
     
+    # Extract AWS account ID from Role ARN
+    aws_account_id = extract_aws_account_id(account_data.role_arn)
+    
     # Create new account
     account = Account(
         account_name=account_data.account_name,
+        aws_account_id=aws_account_id,
         role_arn=account_data.role_arn,
         external_id=account_data.external_id,
         user_id=user_id
@@ -249,8 +258,10 @@ async def trigger_scan(
         external_id = account.external_id
     elif scan_request.role_arn and scan_request.external_id:
         # One-time scan - create temporary account record
+        aws_account_id = extract_aws_account_id(scan_request.role_arn)
         account = Account(
-            account_name=f"One-time scan {datetime.utcnow().isoformat()}",
+            account_name=f"One-time scan {datetime.now(timezone.utc).isoformat()}",
+            aws_account_id=aws_account_id,
             role_arn=scan_request.role_arn,
             external_id=scan_request.external_id,
             user_id=None  # Anonymous
@@ -311,6 +322,17 @@ async def run_scan(scan_id: int, role_arn: str, external_id: str, scan_type: str
         
         def save_opportunity_callback(opp_data: dict):
             """Callback to save opportunities as they're discovered."""
+            # Parse details if it's already a JSON string
+            details_str = opp_data.get('details')
+            if details_str and isinstance(details_str, str):
+                try:
+                    # If it's already JSON, use it; otherwise stringify
+                    json.loads(details_str)
+                except (json.JSONDecodeError, TypeError):
+                    details_str = json.dumps(details_str) if details_str else None
+            elif details_str:
+                details_str = json.dumps(details_str)
+            
             opportunity = SavingsOpportunity(
                 account_id=scan_result.account_id,
                 scan_result_id=scan_result.id,
@@ -323,7 +345,13 @@ async def run_scan(scan_id: int, role_arn: str, external_id: str, scan_type: str
                 potential_savings_annual=opp_data['potential_savings_annual'],
                 savings_percentage=opp_data['savings_percentage'],
                 recommendation=opp_data['recommendation'],
-                details=json.dumps(opp_data.get('details')) if opp_data.get('details') else None
+                action_steps=opp_data.get('action_steps'),
+                implementation_time_hours=opp_data.get('implementation_time_hours'),
+                risk_level=opp_data.get('risk_level'),
+                prerequisites=opp_data.get('prerequisites'),
+                expected_savings_timeline=opp_data.get('expected_savings_timeline'),
+                rollback_plan=opp_data.get('rollback_plan'),
+                details=details_str
             )
             session.add(opportunity)
             session.commit()
@@ -445,20 +473,24 @@ async def get_dashboard(
         account_id = latest_scan.account_id if latest_scan else None
     
     if not latest_scan:
+        account_info = session.get(Account, account_id) if account_id else None
         return DashboardResponse(
             total_potential_savings_annual=0.0,
             total_potential_savings_monthly=0.0,
             opportunities_by_type={},
             opportunities=[],
             last_scan_at=None,
-            account_id=account_id
+            account_id=account_id,
+            aws_account_id=account_info.aws_account_id if account_info else None,
+            account_name=account_info.account_name if account_info else None,
+            total_current_cost_monthly=None
         )
     
-    # Get all opportunities from this scan
+    # Get all opportunities from this scan, sorted by annual savings (highest first)
     opportunities = session.exec(
-        select(SavingsOpportunity).where(
-            SavingsOpportunity.scan_result_id == latest_scan.id
-        )
+        select(SavingsOpportunity)
+        .where(SavingsOpportunity.scan_result_id == latest_scan.id)
+        .order_by(SavingsOpportunity.potential_savings_annual.desc())
     ).all()
     
     # Calculate totals
@@ -478,13 +510,46 @@ async def get_dashboard(
     
     account = session.get(Account, account_id) if account_id else None
     
+    # Calculate total current monthly cost
+    total_current_cost = sum(opp.current_cost_monthly for opp in opportunities)
+    
+    # Convert opportunities to response format with all new fields
+    opportunity_responses = []
+    for opp in opportunities:
+        opp_dict = {
+            'id': opp.id,
+            'opportunity_type': opp.opportunity_type,
+            'resource_id': opp.resource_id,
+            'resource_type': opp.resource_type,
+            'region': opp.region,
+            'current_cost_monthly': opp.current_cost_monthly,
+            'potential_savings_monthly': opp.potential_savings_monthly,
+            'potential_savings_annual': opp.potential_savings_annual,
+            'savings_percentage': opp.savings_percentage,
+            'recommendation': opp.recommendation,
+            'action_steps': opp.action_steps,
+            'implementation_time_hours': opp.implementation_time_hours,
+            'risk_level': opp.risk_level,
+            'prerequisites': opp.prerequisites,
+            'expected_savings_timeline': opp.expected_savings_timeline,
+            'rollback_plan': opp.rollback_plan,
+            'details': opp.details
+        }
+        opportunity_responses.append(SavingsOpportunityResponse(**opp_dict))
+    
+    # Get account info if available
+    account_info = session.get(Account, account_id) if account_id else None
+    
     return DashboardResponse(
         total_potential_savings_annual=round(total_annual, 2),
         total_potential_savings_monthly=round(total_monthly, 2),
         opportunities_by_type=opportunities_by_type,
-        opportunities=[SavingsOpportunityResponse.from_orm(opp) for opp in opportunities],
-        last_scan_at=account.last_scan_at if account else latest_scan.scan_completed_at,
-        account_id=account_id
+        opportunities=opportunity_responses,
+        last_scan_at=account_info.last_scan_at if account_info else latest_scan.scan_completed_at,
+        account_id=account_id,
+        aws_account_id=account_info.aws_account_id if account_info else None,
+        account_name=account_info.account_name if account_info else None,
+        total_current_cost_monthly=round(total_current_cost, 2) if total_current_cost > 0 else None
     )
 
 

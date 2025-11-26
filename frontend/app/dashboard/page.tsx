@@ -20,6 +20,9 @@ interface DashboardData {
   opportunities: any[];
   last_scan_at: string | null;
   account_id: number | null;
+  aws_account_id?: string | null;
+  account_name?: string | null;
+  total_current_cost_monthly?: number | null;
 }
 
 function DashboardContent() {
@@ -166,9 +169,17 @@ function DashboardContent() {
     <div className="min-h-screen bg-slate-50">
       <header className="border-b bg-white">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/" className="text-2xl font-bold text-green-600">
-            SpotSave
-          </Link>
+          <div>
+            <Link href="/" className="text-2xl font-bold text-green-600">
+              SpotSave
+            </Link>
+            {data && data.aws_account_id && (
+              <p className="text-sm text-gray-600 mt-1">
+                AWS Account: <span className="font-mono font-semibold">{data.aws_account_id}</span>
+                {data.account_name && <span className="ml-2">({data.account_name})</span>}
+              </p>
+            )}
+          </div>
           <div className="flex gap-4">
             <Link href="/scan">
               <Button variant="ghost">New Scan</Button>
@@ -232,6 +243,67 @@ function DashboardContent() {
                 totalSavingsMonthly={data.total_potential_savings_monthly}
               />
             </div>
+
+            {/* Cost Breakdown Cards */}
+            {data.total_current_cost_monthly && (
+              <div className="grid md:grid-cols-4 gap-4 mb-6">
+                <Card className="border-blue-200 bg-blue-50/50">
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-blue-600 font-medium mb-1">Current Monthly Cost</p>
+                    <p className="text-2xl font-bold text-blue-900">
+                      {new Intl.NumberFormat("en-US", {
+                        style: "currency",
+                        currency: "USD",
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      }).format(data.total_current_cost_monthly)}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-green-200 bg-green-50/50">
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-green-600 font-medium mb-1">Monthly Savings</p>
+                    <p className="text-2xl font-bold text-green-900">
+                      {new Intl.NumberFormat("en-US", {
+                        style: "currency",
+                        currency: "USD",
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      }).format(data.total_potential_savings_monthly)}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-emerald-200 bg-emerald-50/50">
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-emerald-600 font-medium mb-1">Savings %</p>
+                    <p className="text-2xl font-bold text-emerald-900">
+                      {data.total_current_cost_monthly > 0
+                        ? (
+                            (data.total_potential_savings_monthly / data.total_current_cost_monthly) *
+                            100
+                          ).toFixed(1)
+                        : 0}
+                      %
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-purple-200 bg-purple-50/50">
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-purple-600 font-medium mb-1">After Optimization</p>
+                    <p className="text-2xl font-bold text-purple-900">
+                      {new Intl.NumberFormat("en-US", {
+                        style: "currency",
+                        currency: "USD",
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      }).format(
+                        (data.total_current_cost_monthly || 0) - data.total_potential_savings_monthly
+                      )}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
             <div className="grid md:grid-cols-2 gap-6 mb-8">
               <Card>

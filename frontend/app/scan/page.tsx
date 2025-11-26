@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,20 +9,64 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ErrorDisplay } from "@/components/error-display";
 import { useToast } from "@/components/toaster";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { Loader2, CheckCircle2 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+// Extract AWS Account ID from Role ARN
+function extractAWSAccountId(roleArn: string): string | null {
+  const match = roleArn.match(/arn:aws:iam::(\d{12}):role\//);
+  return match ? match[1] : null;
+}
 
 export default function ScanPage() {
   const router = useRouter();
   const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [extractedAccountId, setExtractedAccountId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     account_name: "",
     role_arn: "",
     external_id: "",
   });
+
+  // Load form data from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("spotsave_scan_form");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setFormData(parsed);
+        // Extract account ID if Role ARN is present
+        if (parsed.role_arn) {
+          const accountId = extractAWSAccountId(parsed.role_arn);
+          setExtractedAccountId(accountId);
+        }
+      } catch (e) {
+        console.error("Failed to load saved form data:", e);
+      }
+    }
+  }, []);
+
+  // Save form data to localStorage whenever it changes
+  useEffect(() => {
+    if (formData.role_arn || formData.external_id) {
+      localStorage.setItem("spotsave_scan_form", JSON.stringify(formData));
+    }
+  }, [formData]);
+
+  // Extract account ID when Role ARN changes
+  const handleRoleArnChange = (value: string) => {
+    setFormData({ ...formData, role_arn: value });
+    const accountId = extractAWSAccountId(value);
+    setExtractedAccountId(accountId);
+    
+    // Auto-fill account name if empty and account ID is extracted
+    if (accountId && !formData.account_name) {
+      setFormData(prev => ({ ...prev, role_arn: value, account_name: `AWS Account ${accountId}` }));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +114,9 @@ export default function ScanPage() {
       const scan = await scanResponse.json();
 
       toast.success("Scan started successfully!", "Scan Initiated");
+      
+      // Clear saved form data after successful scan
+      localStorage.removeItem("spotsave_scan_form");
       
       // Small delay for toast to show
       setTimeout(() => {
@@ -132,10 +179,15 @@ export default function ScanPage() {
                   placeholder="arn:aws:iam::123456789012:role/SpotSaveRole"
                   required
                   value={formData.role_arn}
-                  onChange={(e) =>
-                    setFormData({ ...formData, role_arn: e.target.value })
-                  }
+                  onChange={(e) => handleRoleArnChange(e.target.value)}
+                  className={extractedAccountId ? "border-green-500 focus:border-green-600" : ""}
                 />
+                {extractedAccountId && (
+                  <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 p-2 rounded border border-green-200">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>AWS Account ID detected: <strong>{extractedAccountId}</strong></span>
+                  </div>
+                )}
                 <p className="text-sm text-gray-500">
                   The IAM Role ARN from your AWS setup. Don&apos;t have one?{" "}
                   <Link href="/onboarding" className="text-blue-600 underline">

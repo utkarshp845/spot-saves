@@ -14,6 +14,7 @@ class AccountCreate(BaseModel):
 class AccountResponse(BaseModel):
     id: int
     account_name: str
+    aws_account_id: Optional[str] = None
     role_arn: str
     created_at: datetime
     last_scan_at: Optional[datetime]
@@ -60,7 +61,13 @@ class SavingsOpportunityResponse(BaseModel):
     potential_savings_annual: float
     savings_percentage: float
     recommendation: str
-    details: Optional[str]
+    action_steps: Optional[str] = None
+    implementation_time_hours: Optional[float] = None
+    risk_level: Optional[str] = None
+    prerequisites: Optional[str] = None
+    expected_savings_timeline: Optional[str] = None
+    rollback_plan: Optional[str] = None
+    details: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -74,6 +81,9 @@ class DashboardResponse(BaseModel):
     opportunities: List[SavingsOpportunityResponse]
     last_scan_at: Optional[datetime]
     account_id: Optional[int]
+    aws_account_id: Optional[str] = None
+    account_name: Optional[str] = None
+    total_current_cost_monthly: Optional[float] = None  # Sum of current costs
 
 
 # Health check schema
