@@ -62,6 +62,42 @@ class AWSScanner:
         
         return results
     
+    def scan_account_progressive(self, save_callback) -> Dict[str, Any]:
+        """Perform full account scan with progressive saving via callback."""
+        results = {
+            'opportunities': [],
+            'total_savings_annual': 0.0,
+            'total_savings_monthly': 0.0,
+            'scan_timestamp': datetime.utcnow().isoformat()
+        }
+        
+        # Run all scan types and save opportunities as found
+        ri_sp_opps = self._scan_reserved_instances()
+        for opp in ri_sp_opps:
+            save_callback(opp)
+            results['opportunities'].append(opp)
+        
+        rightsizing_opps = self._scan_rightsizing()
+        for opp in rightsizing_opps:
+            save_callback(opp)
+            results['opportunities'].append(opp)
+        
+        idle_opps = self._scan_idle_resources()
+        for opp in idle_opps:
+            save_callback(opp)
+            results['opportunities'].append(opp)
+        
+        graviton_opps = self._scan_graviton_migration()
+        for opp in graviton_opps:
+            save_callback(opp)
+            results['opportunities'].append(opp)
+        
+        # Calculate totals
+        results['total_savings_monthly'] = sum(opp['potential_savings_monthly'] for opp in results['opportunities'])
+        results['total_savings_annual'] = results['total_savings_monthly'] * 12
+        
+        return results
+    
     def _scan_reserved_instances(self) -> List[Dict[str, Any]]:
         """Scan for Reserved Instance and Savings Plan opportunities."""
         opportunities = []

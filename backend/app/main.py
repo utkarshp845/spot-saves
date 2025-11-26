@@ -3,7 +3,7 @@ import os
 import json
 import asyncio
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
@@ -13,12 +13,18 @@ from sqlmodel import Session, select
 
 from app.database import engine, init_db, get_session, check_migrations
 from app.models import Account, ScanResult, SavingsOpportunity
+# Import ShareToken to ensure it's registered with SQLModel
+from app.share import ShareToken  # noqa: F401
 from app.schemas import (
     AccountCreate, AccountResponse, ScanRequest, ScanResponse,
     ScanStatusResponse, DashboardResponse, SavingsOpportunityResponse,
     HealthResponse
 )
 from app.scanner import AWSScanner
+from app.streaming import create_sse_response
+from app.notifications import send_scan_completion_email
+from app.share import ShareToken, create_share_token
+from app.error_messages import get_user_friendly_error, parse_aws_error
 
 
 @asynccontextmanager
@@ -47,6 +53,110 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.post("/api/scan/{scan_id}/share")
+async def create_share_link(
+    scan_id: int,
+    expires_days: int = 30,
+    password: Optional[str] = None,
+    session: Session = Depends(get_session)
+):
+    """Create a shareable link for scan results."""
+    scan_result = session.get(ScanResult, scan_id)
+    if not scan_result:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    
+    # Create share token
+    share_token = create_share_token(
+        scan_result_id=scan_id,
+        expires_days=expires_days,
+        password=password,
+        session=session
+    )
+    
+    base_url = os.getenv("NEXT_PUBLIC_APP_URL", "http://localhost:3000")
+    share_url = f"{base_url}/share/{share_token.token}"
+    
+    return {
+        "share_url": share_url,
+        "token": share_token.token,
+        "expires_at": share_token.expires_at.isoformat() if share_token.expires_at else None,
+        "password_protected": password is not None
+    }
+
+
+@app.get("/api/share/{token}")
+async def get_shared_scan(
+    token: str,
+    password: Optional[str] = None,
+    session: Session = Depends(get_session)
+):
+    """Get scan results via share token (public access)."""
+    from sqlmodel import select
+    
+    statement = select(ShareToken).where(ShareToken.token == token)
+    share_token = session.exec(statement).first()
+    
+    if not share_token:
+        raise HTTPException(status_code=404, detail="Share link not found")
+    
+    if share_token.is_expired():
+        raise HTTPException(status_code=410, detail="Share link has expired")
+    
+    if not share_token.verify_password(password or ""):
+        raise HTTPException(status_code=401, detail="Invalid password")
+    
+    # Increment access count
+    share_token.access_count += 1
+    session.add(share_token)
+    session.commit()
+    
+    # Get scan result
+    scan_result = session.get(ScanResult, share_token.scan_result_id)
+    if not scan_result:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    
+    # Get opportunities
+    statement = select(SavingsOpportunity).where(
+        SavingsOpportunity.scan_result_id == share_token.scan_result_id
+    )
+    opportunities = session.exec(statement).all()
+    
+    # Return public dashboard data
+    opportunities_by_type = {}
+    for opp in opportunities:
+        if opp.opportunity_type not in opportunities_by_type:
+            opportunities_by_type[opp.opportunity_type] = {
+                "count": 0,
+                "total_savings_annual": 0.0
+            }
+        opportunities_by_type[opp.opportunity_type]["count"] += 1
+        opportunities_by_type[opp.opportunity_type]["total_savings_annual"] += opp.potential_savings_annual
+    
+    return {
+        "total_potential_savings_annual": scan_result.total_potential_savings,
+        "total_potential_savings_monthly": scan_result.total_potential_savings / 12,
+        "opportunities_by_type": opportunities_by_type,
+        "opportunities": [
+            {
+                "id": opp.id,
+                "opportunity_type": opp.opportunity_type,
+                "resource_id": opp.resource_id,
+                "resource_type": opp.resource_type,
+                "region": opp.region,
+                "current_cost_monthly": opp.current_cost_monthly,
+                "potential_savings_monthly": opp.potential_savings_monthly,
+                "potential_savings_annual": opp.potential_savings_annual,
+                "savings_percentage": opp.savings_percentage,
+                "recommendation": opp.recommendation
+            }
+            for opp in opportunities
+        ],
+        "scan_id": scan_result.id,
+        "scan_completed_at": scan_result.scan_completed_at.isoformat() if scan_result.scan_completed_at else None,
+        "shared": True
+    }
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -160,7 +270,8 @@ async def trigger_scan(
     scan_result = ScanResult(
         account_id=account.id,
         scan_type=scan_request.scan_type,
-        status="running"
+        status="running",
+        notification_email=scan_request.notification_email
     )
     session.add(scan_result)
     session.commit()
@@ -172,7 +283,8 @@ async def trigger_scan(
         scan_result.id,
         role_arn,
         external_id,
-        scan_request.scan_type
+        scan_request.scan_type,
+        scan_request.notification_email
     )
     
     return ScanResponse(
@@ -183,43 +295,22 @@ async def trigger_scan(
     )
 
 
-async def run_scan(scan_id: int, role_arn: str, external_id: str, scan_type: str):
-    """Background task to run the actual scan."""
+async def run_scan(scan_id: int, role_arn: str, external_id: str, scan_type: str, notification_email: Optional[str] = None):
+    """Background task to run the actual scan with progressive saving."""
     session = Session(engine)
     try:
         scan_result = session.get(ScanResult, scan_id)
         if not scan_result:
             return
         
-        # Run scanner
+        # Run scanner with callback for progressive saving
         region = os.getenv("AWS_REGION", "us-east-1")
         scanner = AWSScanner(role_arn, external_id, region)
         
-        if scan_type == "quick":
-            # Quick scan - just RI/SP opportunities
-            results = {
-                'opportunities': scanner._scan_reserved_instances(),
-                'total_savings_annual': 0.0,
-                'total_savings_monthly': 0.0
-            }
-            results['total_savings_monthly'] = sum(
-                opp['potential_savings_monthly'] for opp in results['opportunities']
-            )
-            results['total_savings_annual'] = results['total_savings_monthly'] * 12
-        else:
-            # Full scan
-            results = scanner.scan_account()
-        
-        # Save results
-        scan_result.status = "completed"
-        scan_result.scan_completed_at = datetime.utcnow()
-        scan_result.total_potential_savings = results['total_savings_annual']
-        scan_result.raw_data = json.dumps(results)
-        session.add(scan_result)
-        
-        # Save opportunities
         account = session.get(Account, scan_result.account_id)
-        for opp_data in results['opportunities']:
+        
+        def save_opportunity_callback(opp_data: dict):
+            """Callback to save opportunities as they're discovered."""
             opportunity = SavingsOpportunity(
                 account_id=scan_result.account_id,
                 scan_result_id=scan_result.id,
@@ -232,28 +323,82 @@ async def run_scan(scan_id: int, role_arn: str, external_id: str, scan_type: str
                 potential_savings_annual=opp_data['potential_savings_annual'],
                 savings_percentage=opp_data['savings_percentage'],
                 recommendation=opp_data['recommendation'],
-                details=opp_data.get('details')
+                details=json.dumps(opp_data.get('details')) if opp_data.get('details') else None
             )
             session.add(opportunity)
+            session.commit()
+            session.refresh(opportunity)
+            return opportunity
+        
+        if scan_type == "quick":
+            # Quick scan - just RI/SP opportunities
+            opportunities = scanner._scan_reserved_instances()
+            for opp_data in opportunities:
+                save_opportunity_callback(opp_data)
+            
+            total_savings_monthly = sum(opp['potential_savings_monthly'] for opp in opportunities)
+            total_savings_annual = total_savings_monthly * 12
+            
+            results = {
+                'opportunities': opportunities,
+                'total_savings_annual': total_savings_annual,
+                'total_savings_monthly': total_savings_monthly
+            }
+        else:
+            # Full scan with progressive saving
+            results = scanner.scan_account_progressive(save_opportunity_callback)
+        
+        # Mark scan as completed
+        scan_result.status = "completed"
+        scan_result.scan_completed_at = datetime.now(timezone.utc)
+        scan_result.total_potential_savings = results['total_savings_annual']
+        scan_result.raw_data = json.dumps(results)
+        session.add(scan_result)
         
         # Update account last_scan_at
         if account:
-            account.last_scan_at = datetime.utcnow()
+            account.last_scan_at = datetime.now(timezone.utc)
             session.add(account)
         
         session.commit()
+        
+        # Send email notification if requested
+        if notification_email:
+            # Count opportunities
+            statement = select(SavingsOpportunity).where(
+                SavingsOpportunity.scan_result_id == scan_id
+            )
+            opportunities = session.exec(statement).all()
+            opportunities_count = len(opportunities)
+            
+            # Send email
+            send_scan_completion_email(
+                email=notification_email,
+                scan_id=scan_id,
+                total_savings=results['total_savings_annual'],
+                opportunities_count=opportunities_count
+            )
     
     except Exception as e:
-        # Mark scan as failed
+        # Mark scan as failed with user-friendly error
         scan_result = session.get(ScanResult, scan_id)
         if scan_result:
+            error_type = parse_aws_error(str(e))
+            friendly_error = get_user_friendly_error(error_type, str(e))
+            
             scan_result.status = "failed"
-            scan_result.error_message = str(e)
-            scan_result.scan_completed_at = datetime.utcnow()
+            scan_result.error_message = json.dumps(friendly_error)  # Store structured error
+            scan_result.scan_completed_at = datetime.now(timezone.utc)
             session.add(scan_result)
             session.commit()
     finally:
         session.close()
+
+
+@app.get("/api/scan/{scan_id}/progress")
+async def get_scan_progress(scan_id: int):
+    """Stream real-time scan progress via Server-Sent Events."""
+    return create_sse_response(scan_id)
 
 
 @app.get("/api/scan/{scan_id}", response_model=ScanStatusResponse)

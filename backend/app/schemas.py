@@ -29,6 +29,7 @@ class ScanRequest(BaseModel):
     role_arn: Optional[str] = None
     external_id: Optional[str] = None
     scan_type: str = Field(default="full", pattern="^(full|quick)$")
+    notification_email: Optional[str] = None  # Optional email for scan completion notification
 
 
 class ScanResponse(BaseModel):

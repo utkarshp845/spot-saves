@@ -35,6 +35,7 @@ class ScanResult(SQLModel, table=True):
     scan_completed_at: Optional[datetime] = None
     error_message: Optional[str] = None
     raw_data: Optional[str] = None  # JSON string of full scan data
+    notification_email: Optional[str] = None  # Optional email for notifications
     
     # Relationships
     account: Account = Relationship(back_populates="scans")

@@ -26,24 +26,27 @@ export default function HomePage() {
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-20 text-center">
         <h1 className="text-5xl font-bold mb-6 bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-          Find 20-50% AWS Cost Savings
+          Find 20-50% AWS Cost Savings in 2 Minutes
         </h1>
         <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
           Read-only AWS waste scanner that finds hidden savings opportunities.
           No upfront costs - we only charge after showing results.
         </p>
-        <div className="flex gap-4 justify-center">
-          <Link href="/scan">
-            <Button size="lg" className="bg-green-600 hover:bg-green-700">
-              Start Free Scan
+        <div className="flex gap-4 justify-center flex-wrap">
+          <Link href="/onboarding">
+            <Button size="lg" className="bg-green-600 hover:bg-green-700 text-lg px-8 py-6">
+              Get Started Free
             </Button>
           </Link>
-          <Link href="/dashboard">
-            <Button size="lg" variant="outline">
-              View Dashboard
+          <Link href="/demo">
+            <Button size="lg" variant="outline" className="text-lg px-8 py-6">
+              Try Demo
             </Button>
           </Link>
         </div>
+        <p className="text-sm text-gray-500 mt-4">
+          No AWS account? <Link href="/demo" className="text-blue-600 underline">See what results look like</Link>
+        </p>
       </section>
 
       {/* Features */}
@@ -97,9 +100,9 @@ export default function HomePage() {
         <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
           <div className="text-center">
             <div className="text-4xl font-bold text-green-600 mb-4">1</div>
-            <h3 className="text-xl font-semibold mb-2">Connect AWS Account</h3>
+            <h3 className="text-xl font-semibold mb-2">Connect AWS Account (2 Minutes)</h3>
             <p className="text-gray-600">
-              Use Terraform to create a read-only IAM role. Paste the Role ARN and External ID.
+              Use our quick setup wizard - no command line needed! Choose CloudFormation, CloudShell, or Terraform.
             </p>
           </div>
           <div className="text-center">

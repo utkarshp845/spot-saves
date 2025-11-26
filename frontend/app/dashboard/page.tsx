@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { HeroSavings } from "@/components/hero-savings";
 import { SavingsTable } from "@/components/savings-table";
+import { ScanProgress } from "@/components/scan-progress";
 import { Loader2, Download, RefreshCw, ArrowLeft } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 
@@ -31,6 +32,7 @@ function DashboardContent() {
   const [polling, setPolling] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [scanStatus, setScanStatus] = useState<string | null>(null);
 
   const fetchDashboard = async () => {
     try {
@@ -46,9 +48,22 @@ function DashboardContent() {
       const dashboardData = await response.json();
       setData(dashboardData);
 
-      // If scan is in progress, poll for updates
-      if (scanId && dashboardData.opportunities.length === 0) {
-        setPolling(true);
+      // Check scan status if we have a scan ID
+      if (scanId) {
+        try {
+          const scanResponse = await fetch(`${API_URL}/api/scan/${scanId}`);
+          if (scanResponse.ok) {
+            const scanData = await scanResponse.json();
+            setScanStatus(scanData.status);
+            if (scanData.status === "running") {
+              setPolling(false); // Use SSE instead
+            } else {
+              setPolling(false);
+            }
+          }
+        } catch (err) {
+          console.error("Failed to fetch scan status:", err);
+        }
       } else {
         setPolling(false);
       }
@@ -186,14 +201,24 @@ function DashboardContent() {
           </Link>
         </div>
 
-        {polling && (
-          <Card className="mb-6 border-blue-200 bg-blue-50">
+        {scanId && scanStatus === "running" && (
+          <div className="mb-6">
+            <ScanProgress 
+              scanId={parseInt(scanId)} 
+              onComplete={() => {
+                // Refresh dashboard when scan completes
+                fetchDashboard();
+                setScanStatus("completed");
+              }}
+            />
+          </div>
+        )}
+
+        {scanStatus === "failed" && (
+          <Card className="mb-6 border-red-200 bg-red-50">
             <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                <span className="text-blue-800">
-                  Scan in progress... This page will update automatically when complete.
-                </span>
+              <div className="flex items-center gap-2 text-red-800">
+                <span>Scan failed. Please try again or check your AWS connection.</span>
               </div>
             </CardContent>
           </Card>
