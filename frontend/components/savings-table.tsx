@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { TrendingUp } from "lucide-react";
 
 interface SavingsOpportunity {
   id: number;
@@ -61,11 +62,18 @@ export function SavingsTable({ opportunities }: SavingsTableProps) {
 
   if (opportunities.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Savings Opportunities</CardTitle>
-          <CardDescription>No opportunities found yet.</CardDescription>
-        </CardHeader>
+      <Card className="border-dashed border-2">
+        <CardContent className="p-12 text-center">
+          <div className="flex justify-center mb-4">
+            <div className="p-4 bg-gradient-to-br from-green-100 to-emerald-100 rounded-full">
+              <TrendingUp className="h-12 w-12 text-green-600" />
+            </div>
+          </div>
+          <h3 className="text-2xl font-bold mb-2 text-gray-900">No Savings Opportunities Found Yet</h3>
+          <p className="text-gray-600 max-w-md mx-auto">
+            Run a scan to discover cost optimization opportunities in your AWS account.
+          </p>
+        </CardContent>
       </Card>
     );
   }
@@ -94,26 +102,37 @@ export function SavingsTable({ opportunities }: SavingsTableProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {opportunities.map((opp) => (
-                <TableRow key={opp.id}>
+              {opportunities.map((opp, index) => (
+                <TableRow 
+                  key={opp.id} 
+                  className="group hover:bg-green-50/50 transition-colors duration-200 cursor-pointer"
+                  style={{ animationDelay: `${index * 50}ms` }}
+                >
                   <TableCell>
-                    <Badge variant={getOpportunityTypeVariant(opp.opportunity_type)}>
+                    <Badge 
+                      variant={getOpportunityTypeVariant(opp.opportunity_type)}
+                      className="group-hover:scale-105 transition-transform duration-200"
+                    >
                       {getOpportunityTypeLabel(opp.opportunity_type)}
                     </Badge>
                   </TableCell>
                   <TableCell className="font-mono text-xs">
                     {opp.resource_id}
                   </TableCell>
-                  <TableCell>{opp.region}</TableCell>
-                  <TableCell>{formatCurrency(opp.current_cost_monthly)}</TableCell>
-                  <TableCell className="text-green-600 font-semibold">
+                  <TableCell className="font-medium">{opp.region}</TableCell>
+                  <TableCell className="font-medium">{formatCurrency(opp.current_cost_monthly)}</TableCell>
+                  <TableCell className="text-green-600 font-bold group-hover:text-green-700 transition-colors">
                     {formatCurrency(opp.potential_savings_monthly)}
                   </TableCell>
-                  <TableCell className="text-green-600 font-semibold">
+                  <TableCell className="text-green-600 font-bold group-hover:text-green-700 transition-colors">
                     {formatCurrency(opp.potential_savings_annual)}
                   </TableCell>
-                  <TableCell>{opp.savings_percentage.toFixed(1)}%</TableCell>
-                  <TableCell className="max-w-md text-sm">
+                  <TableCell>
+                    <span className="font-semibold text-emerald-600">
+                      {opp.savings_percentage.toFixed(1)}%
+                    </span>
+                  </TableCell>
+                  <TableCell className="max-w-md text-sm text-gray-700">
                     {opp.recommendation}
                   </TableCell>
                 </TableRow>

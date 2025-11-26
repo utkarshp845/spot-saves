@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorDisplay } from "@/components/error-display";
+import { useToast } from "@/components/toaster";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 
@@ -14,6 +15,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function ScanPage() {
   const router = useRouter();
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -67,10 +69,16 @@ export default function ScanPage() {
 
       const scan = await scanResponse.json();
 
-      // Redirect to dashboard with account ID
-      router.push(`/dashboard?account_id=${account.id}&scan_id=${scan.scan_id}`);
+      toast.success("Scan started successfully!", "Scan Initiated");
+      
+      // Small delay for toast to show
+      setTimeout(() => {
+        router.push(`/dashboard?account_id=${account.id}&scan_id=${scan.scan_id}`);
+      }, 500);
     } catch (err: any) {
-      setError(err.message || "An error occurred");
+      const errorMessage = err.message || "An error occurred";
+      setError(errorMessage);
+      toast.error(errorMessage, "Scan Failed");
       setLoading(false);
     }
   };
