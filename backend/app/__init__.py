@@ -1,0 +1,2 @@
+"""SpotSave backend application."""
+

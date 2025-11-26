@@ -1,0 +1,128 @@
+"use client";
+
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
+interface SavingsOpportunity {
+  id: number;
+  opportunity_type: string;
+  resource_id: string;
+  resource_type: string;
+  region: string;
+  current_cost_monthly: number;
+  potential_savings_monthly: number;
+  potential_savings_annual: number;
+  savings_percentage: number;
+  recommendation: string;
+  details?: string;
+}
+
+interface SavingsTableProps {
+  opportunities: SavingsOpportunity[];
+}
+
+export function SavingsTable({ opportunities }: SavingsTableProps) {
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
+
+  const getOpportunityTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      ri_sp: "RI/SP",
+      rightsizing: "Rightsizing",
+      idle: "Idle",
+      graviton: "Graviton",
+    };
+    return labels[type] || type;
+  };
+
+  const getOpportunityTypeVariant = (type: string) => {
+    const variants: Record<string, "default" | "secondary" | "outline"> = {
+      ri_sp: "default",
+      rightsizing: "secondary",
+      idle: "outline",
+      graviton: "default",
+    };
+    return variants[type] || "default";
+  };
+
+  if (opportunities.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Savings Opportunities</CardTitle>
+          <CardDescription>No opportunities found yet.</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Savings Opportunities</CardTitle>
+        <CardDescription>
+          {opportunities.length} opportunity(ies) found
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Type</TableHead>
+                <TableHead>Resource</TableHead>
+                <TableHead>Region</TableHead>
+                <TableHead>Current Cost</TableHead>
+                <TableHead>Savings/Month</TableHead>
+                <TableHead>Savings/Year</TableHead>
+                <TableHead>% Savings</TableHead>
+                <TableHead>Recommendation</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {opportunities.map((opp) => (
+                <TableRow key={opp.id}>
+                  <TableCell>
+                    <Badge variant={getOpportunityTypeVariant(opp.opportunity_type)}>
+                      {getOpportunityTypeLabel(opp.opportunity_type)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {opp.resource_id}
+                  </TableCell>
+                  <TableCell>{opp.region}</TableCell>
+                  <TableCell>{formatCurrency(opp.current_cost_monthly)}</TableCell>
+                  <TableCell className="text-green-600 font-semibold">
+                    {formatCurrency(opp.potential_savings_monthly)}
+                  </TableCell>
+                  <TableCell className="text-green-600 font-semibold">
+                    {formatCurrency(opp.potential_savings_annual)}
+                  </TableCell>
+                  <TableCell>{opp.savings_percentage.toFixed(1)}%</TableCell>
+                  <TableCell className="max-w-md text-sm">
+                    {opp.recommendation}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
