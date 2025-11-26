@@ -161,7 +161,7 @@ export default function OnboardingPage() {
   };
 
   const renderCloudFormationInstructions = () => {
-    const cloudformationUrl = `https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://raw.githubusercontent.com/your-repo/spotsave/main/cloudformation/spotsave-role.yaml&param_SpotSaveAccountId=${SPOTSAVE_ACCOUNT_ID}`;
+    const cloudformationUrl = `https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://raw.githubusercontent.com/utkarshp845/spot-saves/feature/ux-improvements/cloudformation/spotsave-role.yaml&param_SpotSaveAccountId=${SPOTSAVE_ACCOUNT_ID}`;
     
     return (
       <div className="space-y-6">
