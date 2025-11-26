@@ -11,7 +11,7 @@ import Link from "next/link";
 import { ArrowRight, ArrowLeft, CheckCircle2, Cloud, Terminal, FileText, Copy, Check } from "lucide-react";
 
 const SPOTSAVE_ACCOUNT_ID = "236763662741"; // This would come from env in production
-const CLOUDFORMATION_TEMPLATE_URL = "https://raw.githubusercontent.com/utkarshp845/spot-saves/feature/ux-improvements/cloudformation/spotsave-role.yaml";
+const CLOUDFORMATION_TEMPLATE_URL = "https://raw.githubusercontent.com/utkarshp845/spot-saves/main/cloudformation/spotsave-role.yaml";
 
 type SetupMethod = "cloudformation" | "cloudshell" | "manual";
 
