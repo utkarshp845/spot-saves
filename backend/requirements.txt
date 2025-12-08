@@ -13,4 +13,7 @@ aiocron==1.8
 httpx==0.25.2
 pandas==2.1.4
 numpy==1.26.2
+psycopg2-binary==2.9.9
+alembic==1.13.1
+slowapi==0.1.9
 

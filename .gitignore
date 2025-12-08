@@ -56,3 +56,21 @@ Thumbs.db
 logs/
 *.log
 
+
+# Deployment files
+*.log
+deployment*.log
+apprunner-*.json
+ecs-task-definition-*.json
+lightsail-*.json
+deploy-*.json
+
+# Terraform state (keep in terraform-onboarding)
+terraform-onboarding/.terraform/
+terraform-onboarding/*.tfstate
+terraform-onboarding/*.tfstate.*
+terraform-onboarding/.terraform.lock.hcl
+terraform-onboarding/terraform.tfvars
+
+# Environment files with secrets
+.env.production

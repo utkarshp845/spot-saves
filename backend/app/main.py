@@ -12,7 +12,9 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, Response
 from sqlmodel import Session, select
 
-from app.database import engine, init_db, get_session, check_migrations
+from app.config import settings
+from app.logging_config import setup_logging, get_logger
+from app.database import engine, init_db, get_session, check_migrations, check_db_connection
 from app.models import Account, ScanResult, SavingsOpportunity
 # Import ShareToken to ensure it's registered with SQLModel
 from app.share import ShareToken  # noqa: F401
@@ -28,28 +30,46 @@ from app.share import ShareToken, create_share_token
 from app.error_messages import get_user_friendly_error, parse_aws_error
 
 
+logger = get_logger(__name__)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
-    print("Initializing SpotSave backend...")
-    init_db()
+    setup_logging()
+    logger.info("Initializing SpotSave backend...", extra={"environment": settings.environment})
+    try:
+        init_db()
+        logger.info("Backend initialized successfully")
+    except Exception as e:
+        logger.critical(f"Failed to initialize backend: {e}", exc_info=True)
+        raise
     yield
     # Shutdown
-    print("Shutting down SpotSave backend...")
+    logger.info("Shutting down SpotSave backend...")
 
 
 app = FastAPI(
-    title="SpotSave API",
+    title=settings.app_name,
     description="AWS Cost Optimization Scanner",
-    version="1.0.0",
-    lifespan=lifespan
+    version=settings.app_version,
+    lifespan=lifespan,
+    docs_url="/docs" if not settings.is_production else None,  # Disable docs in production
+    redoc_url="/redoc" if not settings.is_production else None,
 )
 
-# CORS configuration
+# CORS configuration - allow production domain
+cors_origins = settings.get_cors_origins()
+if settings.is_production:
+    cors_origins.extend([
+        "https://spotsave.pandeylabs.com",
+        "https://www.spotsave.pandeylabs.com"
+    ])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://frontend:3000"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -163,21 +183,53 @@ async def get_shared_scan(
     }
 
 
-@app.get("/health", response_model=HealthResponse)
-async def health_check(session: Session = Depends(get_session)):
-    """Health check endpoint."""
+@app.get("/health")
+@app.head("/health")
+async def health_check():
+    """Liveness probe - simple check without database dependency. Accepts both GET and HEAD."""
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
+@app.get("/health/ready", response_model=HealthResponse)
+async def readiness_check():
+    """Readiness probe - checks if service is ready to accept traffic."""
+    db_healthy = check_db_connection()
+    
+    status = "healthy" if db_healthy else "degraded"
+    db_status = "connected" if db_healthy else "error"
+    
+    response = HealthResponse(
+        status=status,
+        database=db_status,
+        timestamp=datetime.now(timezone.utc)
+    )
+    
+    if not db_healthy:
+        logger.warning("Readiness check failed - database connection unhealthy")
+        raise HTTPException(status_code=503, detail=response.model_dump())
+    
+    return response
+
+
+@app.get("/health/detailed", response_model=HealthResponse)
+async def detailed_health_check(session: Session = Depends(get_session)):
+    """Detailed health check endpoint with database connection test."""
     try:
         # Test database connection
         session.exec(select(Account)).first()
         db_status = "connected"
-    except Exception:
+        health_status = "healthy"
+    except Exception as e:
+        logger.error(f"Detailed health check failed: {e}")
         db_status = "error"
+        health_status = "degraded"
     
-    return HealthResponse(
-        status="healthy",
+    response = HealthResponse(
+        status=health_status,
         database=db_status,
         timestamp=datetime.now(timezone.utc)
     )
+    return response
 
 
 @app.post("/api/accounts", response_model=AccountResponse)

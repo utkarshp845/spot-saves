@@ -1,0 +1,29 @@
+# AWS Configuration
+aws_region  = "us-east-1"
+environment = "production"
+
+# VPC Configuration
+vpc_cidr = "10.0.0.0/16"
+
+# Database Configuration
+db_name             = "spotsave"
+db_username         = "spotsave_admin"  # Will be stored in Secrets Manager
+db_instance_class   = "db.t3.micro"
+db_allocated_storage = 20
+db_backup_retention_days = 7
+db_multi_az = false  # Set to true for production HA
+
+# Application Configuration
+domain_name = "spotsave.com"  # Your domain name
+nextauth_secret = "generate-with-openssl-rand-base64-32"
+nextauth_url = "https://spotsave.com"
+next_public_app_url = "https://spotsave.com"
+
+# ECS Configuration
+frontend_cpu = 512
+frontend_memory = 1024
+backend_cpu = 1024
+backend_memory = 2048
+min_capacity = 1
+max_capacity = 10
+

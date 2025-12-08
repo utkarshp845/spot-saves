@@ -32,7 +32,7 @@ export default function HomePage() {
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-20 text-center animate-in">
         <div className="inline-block mb-4 px-4 py-2 bg-green-100 text-green-700 rounded-full text-sm font-semibold animate-slide-in">
-          ✨ Trusted by 10,000+ AWS users worldwide
+          ✨ Trusted by AWS users worldwide
         </div>
         <h1 className="text-5xl md:text-6xl font-extrabold mb-6 bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 bg-clip-text text-transparent animate-slide-in">
           Find 20-50% AWS Cost Savings<br />in 2 Minutes
