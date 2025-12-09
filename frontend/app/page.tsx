@@ -184,7 +184,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="border-t pt-8 text-center text-sm text-gray-600">
-            <p>&copy; 2024 SpotSave. All rights reserved. Built with ❤️ for cost-conscious AWS users.</p>
+            <p>&copy; 2026 SpotSave. All rights reserved. Built with ❤️ for cost-conscious AWS users.</p>
           </div>
         </div>
       </footer>
