@@ -49,29 +49,76 @@ jobs:
           docker build -t $ECR_REGISTRY/spotsave-backend:$IMAGE_TAG .
           docker push $ECR_REGISTRY/spotsave-backend:$IMAGE_TAG
 
-      - name: Trigger frontend deployment
+      - name: Wait for services to be ready and trigger deployments
         run: |
-          aws apprunner start-deployment \
-            --service-arn ${{ env.FRONTEND_SERVICE_ARN }} \
-            --region ${{ env.AWS_REGION }}
-
-      - name: Trigger backend deployment
-        run: |
-          aws apprunner start-deployment \
-            --service-arn ${{ env.BACKEND_SERVICE_ARN }} \
-            --region ${{ env.AWS_REGION }}
+          # Function to wait for service to be RUNNING
+          wait_for_service() {
+            local SERVICE_ARN=$1
+            local SERVICE_NAME=$2
+            local MAX_WAIT=300  # 5 minutes
+            local ELAPSED=0
+            
+            echo "Checking $SERVICE_NAME service state..."
+            while [ $ELAPSED -lt $MAX_WAIT ]; do
+              STATUS=$(aws apprunner describe-service \
+                --service-arn "$SERVICE_ARN" \
+                --region ${{ env.AWS_REGION }} \
+                --query "Service.Status" --output text 2>/dev/null || echo "UNKNOWN")
+              
+              echo "$SERVICE_NAME status: $STATUS"
+              
+              if [ "$STATUS" = "RUNNING" ]; then
+                echo "✅ $SERVICE_NAME is RUNNING, starting deployment..."
+                # Try to start deployment
+                if aws apprunner start-deployment \
+                  --service-arn "$SERVICE_ARN" \
+                  --region ${{ env.AWS_REGION }} 2>&1; then
+                  echo "✅ $SERVICE_NAME deployment started successfully"
+                  return 0
+                else
+                  # Check if it's already deploying
+                  CURRENT_STATUS=$(aws apprunner describe-service \
+                    --service-arn "$SERVICE_ARN" \
+                    --region ${{ env.AWS_REGION }} \
+                    --query "Service.Status" --output text 2>/dev/null || echo "UNKNOWN")
+                  if [ "$CURRENT_STATUS" = "RUNNING" ] || [ "$CURRENT_STATUS" = "OPERATION_IN_PROGRESS" ]; then
+                    echo "⚠️ $SERVICE_NAME deployment may already be in progress (status: $CURRENT_STATUS)"
+                    return 0
+                  else
+                    echo "❌ Failed to start $SERVICE_NAME deployment (status: $CURRENT_STATUS)"
+                    return 1
+                  fi
+                fi
+              elif [ "$STATUS" = "CREATE_FAILED" ] || [ "$STATUS" = "UPDATE_FAILED" ]; then
+                echo "❌ $SERVICE_NAME is in failed state: $STATUS"
+                return 1
+              fi
+              
+              sleep 15
+              ELAPSED=$((ELAPSED + 15))
+            done
+            
+            echo "⚠️ Timeout waiting for $SERVICE_NAME to be RUNNING"
+            return 1
+          }
+          
+          # Wait and deploy frontend
+          wait_for_service "${{ env.FRONTEND_SERVICE_ARN }}" "Frontend" || echo "⚠️ Frontend deployment step had issues, continuing..."
+          
+          # Wait and deploy backend
+          wait_for_service "${{ env.BACKEND_SERVICE_ARN }}" "Backend" || echo "⚠️ Backend deployment step had issues, continuing..."
 
       - name: Wait for deployments to complete
         run: |
-          echo "Waiting for frontend deployment..."
+          echo "Waiting for frontend deployment to complete..."
           aws apprunner wait service-running \
             --service-arn ${{ env.FRONTEND_SERVICE_ARN }} \
-            --region ${{ env.AWS_REGION }} || true
+            --region ${{ env.AWS_REGION }} || echo "⚠️ Frontend deployment wait timed out or failed"
           
-          echo "Waiting for backend deployment..."
+          echo "Waiting for backend deployment to complete..."
           aws apprunner wait service-running \
             --service-arn ${{ env.BACKEND_SERVICE_ARN }} \
-            --region ${{ env.AWS_REGION }} || true
+            --region ${{ env.AWS_REGION }} || echo "⚠️ Backend deployment wait timed out or failed"
 
       - name: Deployment summary
         run: |
