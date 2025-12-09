@@ -17,18 +17,8 @@ Parameters:
     Description: Name for the IAM role
     Default: 'SpotSaveRole'
 
-Resources:
-  SpotSaveExternalId:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub '/spotsave/${RoleName}/external-id'
-      Type: String
-      Value: !Sub |
-        {
-          "externalId": "${!If [HasExternalId, !Ref ExternalId, !Ref 'AWS::NoValue']}",
-          "generatedAt": "${!Ref 'AWS::Region'}"
-        }
-      Description: 'SpotSave External ID - Keep this secure'
+  # SSM Parameter is now created by the Lambda function
+  # Keeping this resource for backwards compatibility but it will be overwritten by Lambda
 
   # Lambda execution role for the custom resource handler
   RoleHandlerExecutionRole:
@@ -59,6 +49,11 @@ Resources:
                   - 'iam:PutRolePolicy'
                   - 'iam:TagRole'
                 Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'ssm:PutParameter'
+                  - 'ssm:GetParameter'
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/spotsave/*'
 
   # Lambda function to handle role creation/updates (handles existing roles gracefully)
   RoleHandlerFunction:
@@ -87,11 +82,18 @@ Resources:
               request_type = event['RequestType']
               role_name = event['ResourceProperties']['RoleName']
               spotsave_account_id = event['ResourceProperties']['SpotSaveAccountId']
-              external_id = event['ResourceProperties'].get('ExternalId', '')
+              external_id_param = event['ResourceProperties'].get('ExternalId', '')
               managed_policy_arns = event['ResourceProperties'].get('ManagedPolicyArns', [])
               inline_policy_name = event['ResourceProperties'].get('InlinePolicyName', '')
               inline_policy_document = event['ResourceProperties'].get('InlinePolicyDocument', {})
               tags = event['ResourceProperties'].get('Tags', [])
+              
+              # Generate external ID if not provided
+              import uuid
+              if external_id_param:
+                  external_id = external_id_param
+              else:
+                  external_id = str(uuid.uuid4())
               
               response_data = {}
               
@@ -237,10 +239,27 @@ Resources:
                           print(f"Warning: Error handling inline policy {inline_policy_name}: {e}")
                           # Don't fail the whole operation if policy update fails
                   
+                  # Store external ID in SSM Parameter
+                  import boto3
+                  ssm = boto3.client('ssm')
+                  ssm_param_name = f'/spotsave/{role_name}/external-id'
+                  try:
+                      ssm.put_parameter(
+                          Name=ssm_param_name,
+                          Value=external_id,
+                          Type='String',
+                          Description='SpotSave External ID - Keep this secure',
+                          Overwrite=True
+                      )
+                      print(f"Stored external ID in SSM: {ssm_param_name}")
+                  except Exception as e:
+                      print(f"Warning: Could not store in SSM: {e}")
+                  
                   response_data['RoleArn'] = role_arn
                   response_data['RoleName'] = role_name
+                  response_data['ExternalId'] = external_id
                   
-                  print(f"Success! Role ARN: {role_arn}")
+                  print(f"Success! Role ARN: {role_arn}, External ID: {external_id}")
                   cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
                   
               except Exception as e:
@@ -294,10 +313,7 @@ Outputs:
   
   ExternalId:
     Description: 'External ID - Use this in SpotSave (Keep secure!)'
-    Value: !If 
-      - HasExternalId
-      - !Ref ExternalId
-      - !GetAtt SpotSaveExternalId.Value
+    Value: !GetAtt SpotSaveRole.ExternalId
     Export:
       Name: !Sub '${AWS::StackName}-ExternalId'
   
@@ -307,7 +323,7 @@ Outputs:
       Setup Complete!
       
       1. Copy the Role ARN: ${SpotSaveRole.RoleArn}
-      2. Copy the External ID: ${!If [HasExternalId, !Ref ExternalId, 'Check CloudFormation Outputs']}
+      2. Copy the External ID: ${SpotSaveRole.ExternalId}
       3. Go to your SpotSave dashboard
       4. Enter these values to start scanning
 
