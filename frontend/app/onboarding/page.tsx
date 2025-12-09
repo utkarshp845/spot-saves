@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { ArrowRight, ArrowLeft, CheckCircle2, Cloud, Terminal, FileText, Copy, Check } from "lucide-react";
 
-const SPOTSAVE_ACCOUNT_ID = "236763662741"; // This would come from env in production
+const SPOTSAVE_ACCOUNT_ID = process.env.NEXT_PUBLIC_SPOTSAVE_ACCOUNT_ID || ""; // Must be set via environment variable
 const CLOUDFORMATION_TEMPLATE_URL = "https://raw.githubusercontent.com/utkarshp845/spot-saves/main/cloudformation/spotsave-role.yaml";
 
 type SetupMethod = "cloudformation" | "cloudshell" | "manual";
@@ -162,7 +162,9 @@ export default function OnboardingPage() {
   };
 
   const renderCloudFormationInstructions = () => {
-    const cloudformationUrl = `https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=${encodeURIComponent(CLOUDFORMATION_TEMPLATE_URL)}&param_SpotSaveAccountId=${SPOTSAVE_ACCOUNT_ID}`;
+    // Only add account ID to URL if it's set (otherwise user will need to enter it manually in CloudFormation)
+    const accountIdParam = SPOTSAVE_ACCOUNT_ID ? `&param_SpotSaveAccountId=${SPOTSAVE_ACCOUNT_ID}` : '';
+    const cloudformationUrl = `https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=${encodeURIComponent(CLOUDFORMATION_TEMPLATE_URL)}${accountIdParam}`;
     
     return (
       <div className="space-y-6">
@@ -236,12 +238,18 @@ export default function OnboardingPage() {
           <CardContent className="space-y-3">
             <div className="space-y-2">
               <Label>SpotSave Account ID:</Label>
+              {!SPOTSAVE_ACCOUNT_ID && (
+                <p className="text-sm text-amber-600 mb-2">
+                  ⚠️ Account ID not configured. Please set NEXT_PUBLIC_SPOTSAVE_ACCOUNT_ID environment variable or enter it manually in CloudFormation.
+                </p>
+              )}
               <div className="flex gap-2">
                 <Input
-                  value={SPOTSAVE_ACCOUNT_ID}
+                  value={SPOTSAVE_ACCOUNT_ID || "Not configured - set NEXT_PUBLIC_SPOTSAVE_ACCOUNT_ID"}
                   readOnly
                   className="font-mono text-sm"
                   onClick={(e) => (e.target as HTMLInputElement).select()}
+                  disabled={!SPOTSAVE_ACCOUNT_ID}
                 />
                 <Button
                   variant="outline"
@@ -266,7 +274,11 @@ export default function OnboardingPage() {
             </div>
             <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700">
               <li>Enter the Stack name (e.g., &quot;SpotSaveRole&quot;)</li>
-              <li>Paste the SpotSave Account ID above: <code className="bg-gray-100 px-1 rounded">{SPOTSAVE_ACCOUNT_ID}</code></li>
+              <li>Enter the SpotSave Account ID: {SPOTSAVE_ACCOUNT_ID ? (
+                <code className="bg-gray-100 px-1 rounded">{SPOTSAVE_ACCOUNT_ID}</code>
+              ) : (
+                <span className="text-amber-600">(Get this from your SpotSave dashboard)</span>
+              )}</li>
               <li>External ID: Leave empty (it will be auto-generated) or enter a custom value</li>
               <li>Scroll down and check &quot;I acknowledge that AWS CloudFormation might create IAM resources&quot;</li>
               <li>Click <strong>&quot;Submit&quot;</strong> or <strong>&quot;Create stack&quot;</strong></li>
@@ -342,9 +354,10 @@ export default function OnboardingPage() {
               <pre className="bg-gray-900 text-green-400 p-4 rounded-lg overflow-x-auto text-xs font-mono">
 {`#!/bin/bash
 # SpotSave Quick Setup - Paste this in CloudShell
+# IMPORTANT: Replace YOUR_SPOTSAVE_ACCOUNT_ID with your actual account ID from SpotSave dashboard
 
 EXTERNAL_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-SPOTSAVE_ACCOUNT_ID="${SPOTSAVE_ACCOUNT_ID}"
+SPOTSAVE_ACCOUNT_ID="${SPOTSAVE_ACCOUNT_ID || "YOUR_SPOTSAVE_ACCOUNT_ID"}"
 ROLE_NAME="SpotSaveRole"
 
 # Create trust policy
@@ -389,9 +402,10 @@ echo "Copy these values and use them in SpotSave!"`}
                 onClick={async () => {
                   const script = `#!/bin/bash
 # SpotSave Quick Setup - Paste this in CloudShell
+# IMPORTANT: Replace YOUR_SPOTSAVE_ACCOUNT_ID with your actual account ID from SpotSave dashboard
 
 EXTERNAL_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-SPOTSAVE_ACCOUNT_ID="${SPOTSAVE_ACCOUNT_ID}"
+SPOTSAVE_ACCOUNT_ID="${SPOTSAVE_ACCOUNT_ID || "YOUR_SPOTSAVE_ACCOUNT_ID"}"
 ROLE_NAME="SpotSaveRole"
 
 TRUST_POLICY='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"arn:aws:iam::${SPOTSAVE_ACCOUNT_ID}:root"},"Action":"sts:AssumeRole","Condition":{"StringEquals":{"sts:ExternalId":"$EXTERNAL_ID"}}}]}'
@@ -473,8 +487,13 @@ echo "Copy these values and use them in SpotSave!"`;
             <div className="space-y-2">
               <p className="text-sm font-semibold">2. Create terraform.tfvars:</p>
               <code className="block bg-gray-100 p-2 rounded text-sm">
-                {`spotsave_account_id = "${SPOTSAVE_ACCOUNT_ID}"\nrole_name = "SpotSaveRole"`}
+                {`spotsave_account_id = "${SPOTSAVE_ACCOUNT_ID || "YOUR_SPOTSAVE_ACCOUNT_ID"}"\nrole_name = "SpotSaveRole"`}
               </code>
+              {!SPOTSAVE_ACCOUNT_ID && (
+                <p className="text-xs text-amber-600 mt-1">
+                  ⚠️ Replace YOUR_SPOTSAVE_ACCOUNT_ID with your actual account ID from SpotSave dashboard
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <p className="text-sm font-semibold">3. Run Terraform:</p>

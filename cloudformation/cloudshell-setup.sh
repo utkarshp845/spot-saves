@@ -10,8 +10,19 @@ echo ""
 
 # Generate random external ID
 EXTERNAL_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-SPOTSAVE_ACCOUNT_ID="236763662741"  # Update with your SpotSave account ID
+
+# SpotSave Account ID - REQUIRED: Replace with your SpotSave service account ID
+# Get this from your SpotSave dashboard or contact SpotSave support
+SPOTSAVE_ACCOUNT_ID=""  # TODO: Replace with your SpotSave account ID
 ROLE_NAME="SpotSaveRole"
+
+# Validate that account ID is set
+if [ -z "$SPOTSAVE_ACCOUNT_ID" ]; then
+  echo "❌ ERROR: SPOTSAVE_ACCOUNT_ID is not set!"
+  echo "Please set SPOTSAVE_ACCOUNT_ID to your SpotSave service account ID"
+  echo "You can find this in your SpotSave dashboard or contact SpotSave support"
+  exit 1
+fi
 
 echo "📋 Configuration:"
 echo "  Role Name: $ROLE_NAME"

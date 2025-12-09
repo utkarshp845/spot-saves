@@ -13,7 +13,7 @@ One-click AWS setup using CloudFormation - no command line required!
    (Replace with your hosted template URL)
 
 2. **Fill in the parameters:**
-   - **SpotSaveAccountId**: `236763662741` (or your SpotSave account ID)
+   - **SpotSaveAccountId**: Your SpotSave service account ID (required - get this from your SpotSave dashboard)
    - **ExternalId**: Leave empty (auto-generated) OR enter a custom value
    - **RoleName**: `SpotSaveRole` (or your preferred name)
 
@@ -42,9 +42,11 @@ aws cloudformation create-stack \
   --stack-name spotsave-role \
   --template-body file://spotsave-role.yaml \
   --parameters \
-    ParameterKey=SpotSaveAccountId,ParameterValue=236763662741 \
+    ParameterKey=SpotSaveAccountId,ParameterValue=YOUR_SPOTSAVE_ACCOUNT_ID \
     ParameterKey=RoleName,ParameterValue=SpotSaveRole
 ```
+
+**Note:** Replace `YOUR_SPOTSAVE_ACCOUNT_ID` with your actual SpotSave service account ID from your dashboard.
 
 Then get outputs:
 ```bash
