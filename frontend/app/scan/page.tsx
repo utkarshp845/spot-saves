@@ -11,16 +11,24 @@ import { useToast } from "@/components/toaster";
 import Link from "next/link";
 import { Loader2, CheckCircle2 } from "lucide-react";
 
-// Get API URL - use environment variable if set, otherwise use relative URLs for rewrites
-// In production App Runner, NEXT_PUBLIC_API_URL should be set to backend URL
+// Get API URL - smart detection for production vs development
 const getApiUrl = () => {
-  // If environment variable is set and not localhost, use it (production)
-  const envUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (envUrl && !envUrl.includes('localhost')) {
-    return envUrl;
+  // In browser, detect production environment
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    // If running on App Runner (production), use the backend URL directly
+    if (hostname.includes('awsapprunner.com')) {
+      return 'https://pqykjsmmab.us-east-1.awsapprunner.com';
+    }
+    // If running on custom domain, construct backend URL or use relative
+    if (hostname.includes('spotsave.pandeylabs.com')) {
+      return 'https://pqykjsmmab.us-east-1.awsapprunner.com';
+    }
+    // Development: use relative URLs (Next.js rewrites will handle it)
+    return '';
   }
-  // Otherwise use relative URLs (Next.js rewrites will proxy to backend)
-  return typeof window !== 'undefined' ? '' : (envUrl || "http://localhost:8000");
+  // Server-side: use environment variable or default
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 };
 const API_URL = getApiUrl();
 

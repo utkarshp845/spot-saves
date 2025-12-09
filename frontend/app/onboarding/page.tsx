@@ -641,13 +641,16 @@ function CredentialsFormComponent({ onBack, setupMethod }: { onBack: () => void;
     external_id: "",
   });
 
-  // Get API URL - use environment variable if set, otherwise use relative URLs
+  // Get API URL - smart detection for production vs development
   const getApiUrl = () => {
-    const envUrl = process.env.NEXT_PUBLIC_API_URL;
-    if (envUrl && !envUrl.includes('localhost')) {
-      return envUrl;
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      if (hostname.includes('awsapprunner.com') || hostname.includes('spotsave.pandeylabs.com')) {
+        return 'https://pqykjsmmab.us-east-1.awsapprunner.com';
+      }
+      return '';
     }
-    return typeof window !== 'undefined' ? '' : (envUrl || "http://localhost:8000");
+    return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   };
   const API_URL = getApiUrl();
 
