@@ -11,13 +11,16 @@ import { useToast } from "@/components/toaster";
 import Link from "next/link";
 import { Loader2, CheckCircle2 } from "lucide-react";
 
-// Use relative URLs to leverage Next.js rewrites (works in both dev and production)
-// In browser, use relative URLs; in SSR, use full URL
+// Get API URL - use environment variable if set, otherwise use relative URLs for rewrites
+// In production App Runner, NEXT_PUBLIC_API_URL should be set to backend URL
 const getApiUrl = () => {
-  if (typeof window !== 'undefined') {
-    return ''; // Use relative URLs in browser (Next.js rewrites will handle it)
+  // If environment variable is set and not localhost, use it (production)
+  const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (envUrl && !envUrl.includes('localhost')) {
+    return envUrl;
   }
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  // Otherwise use relative URLs (Next.js rewrites will proxy to backend)
+  return typeof window !== 'undefined' ? '' : (envUrl || "http://localhost:8000");
 };
 const API_URL = getApiUrl();
 

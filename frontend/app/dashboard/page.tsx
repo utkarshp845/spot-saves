@@ -11,12 +11,13 @@ import { ScanProgress } from "@/components/scan-progress";
 import { Loader2, Download, RefreshCw, ArrowLeft } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 
-// Use relative URLs to leverage Next.js rewrites (works in both dev and production)
+// Get API URL - use environment variable if set, otherwise use relative URLs for rewrites
 const getApiUrl = () => {
-  if (typeof window !== 'undefined') {
-    return ''; // Use relative URLs in browser (Next.js rewrites will handle it)
+  const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (envUrl && !envUrl.includes('localhost')) {
+    return envUrl;
   }
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  return typeof window !== 'undefined' ? '' : (envUrl || "http://localhost:8000");
 };
 const API_URL = getApiUrl();
 
