@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
+from starlette.requests import Request as StarletteRequest
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, Response
@@ -77,6 +78,19 @@ app.add_middleware(
 
 # Response compression for faster API responses
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: StarletteRequest, call_next):
+    """Add security headers to all responses."""
+    response = await call_next(request)
+    if settings.is_production:
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 
 @app.post("/api/scan/{scan_id}/share")

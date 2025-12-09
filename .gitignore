@@ -64,6 +64,9 @@ apprunner-*.json
 ecs-task-definition-*.json
 lightsail-*.json
 deploy-*.json
+frontend-update.json
+*.tmp
+*.temp
 
 # Terraform state (keep in terraform-onboarding)
 terraform-onboarding/.terraform/

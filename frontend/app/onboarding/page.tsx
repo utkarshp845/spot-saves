@@ -197,7 +197,7 @@ export default function OnboardingPage() {
                     URL.revokeObjectURL(url);
                   } catch (error) {
                     console.error('Failed to download template:', error);
-                    alert('Failed to download template. Please try again.');
+                    // Error is logged, user can retry
                   }
                 }}
               >

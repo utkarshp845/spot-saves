@@ -96,7 +96,7 @@ function DashboardContent() {
 
   const handleExport = async () => {
     if (!scanId) {
-      alert("No scan data available to export");
+      console.error("No scan data available to export");
       return;
     }
 
@@ -119,7 +119,7 @@ function DashboardContent() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(`Export failed: ${err.message}`);
+      console.error(`Export failed: ${err.message}`);
     }
   };
 
