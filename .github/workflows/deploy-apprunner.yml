@@ -1,0 +1,81 @@
+name: Deploy to AWS App Runner
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Allows manual triggering
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 236763662741.dkr.ecr.us-east-1.amazonaws.com
+  FRONTEND_SERVICE_ARN: arn:aws:apprunner:us-east-1:236763662741:service/spotsave-frontend/310522d22b874448957fc7f4daac044b
+  BACKEND_SERVICE_ARN: arn:aws:apprunner:us-east-1:236763662741:service/spotsave-backend/2976eeac3e3545ca9c26afa89c225ec0
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push frontend image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: latest
+        run: |
+          cd frontend
+          docker build -t $ECR_REGISTRY/spotsave-frontend:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/spotsave-frontend:$IMAGE_TAG
+
+      - name: Build and push backend image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: latest
+        run: |
+          cd backend
+          docker build -t $ECR_REGISTRY/spotsave-backend:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/spotsave-backend:$IMAGE_TAG
+
+      - name: Trigger frontend deployment
+        run: |
+          aws apprunner start-deployment \
+            --service-arn ${{ env.FRONTEND_SERVICE_ARN }} \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Trigger backend deployment
+        run: |
+          aws apprunner start-deployment \
+            --service-arn ${{ env.BACKEND_SERVICE_ARN }} \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Wait for deployments to complete
+        run: |
+          echo "Waiting for frontend deployment..."
+          aws apprunner wait service-running \
+            --service-arn ${{ env.FRONTEND_SERVICE_ARN }} \
+            --region ${{ env.AWS_REGION }} || true
+          
+          echo "Waiting for backend deployment..."
+          aws apprunner wait service-running \
+            --service-arn ${{ env.BACKEND_SERVICE_ARN }} \
+            --region ${{ env.AWS_REGION }} || true
+
+      - name: Deployment summary
+        run: |
+          echo "✅ Deployment completed!"
+          echo "Frontend: https://pc35p58bek.us-east-1.awsapprunner.com"
+          echo "Backend: https://pqykjsmmab.us-east-1.awsapprunner.com"
+
