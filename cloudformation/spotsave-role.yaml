@@ -17,8 +17,8 @@ Parameters:
     Description: Name for the IAM role
     Default: 'SpotSaveRole'
 
-  # SSM Parameter is now created by the Lambda function
-  # Keeping this resource for backwards compatibility but it will be overwritten by Lambda
+Resources:
+  # SSM Parameter is created by the Lambda function, no need for separate resource
 
   # Lambda execution role for the custom resource handler
   RoleHandlerExecutionRole:
