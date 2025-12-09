@@ -11,7 +11,14 @@ import { ScanProgress } from "@/components/scan-progress";
 import { Loader2, Download, RefreshCw, ArrowLeft } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Use relative URLs to leverage Next.js rewrites (works in both dev and production)
+const getApiUrl = () => {
+  if (typeof window !== 'undefined') {
+    return ''; // Use relative URLs in browser (Next.js rewrites will handle it)
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+};
+const API_URL = getApiUrl();
 
 interface DashboardData {
   total_potential_savings_annual: number;

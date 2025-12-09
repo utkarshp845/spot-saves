@@ -32,8 +32,13 @@ export function ScanProgress({ scanId, onComplete }: ScanProgressProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // EventSource needs full URL, so we construct it from current location
+    // In production, this will use the Next.js rewrite
+    const apiUrl = typeof window !== 'undefined' 
+      ? window.location.origin 
+      : (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000");
     const eventSource = new EventSource(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/scan/${scanId}/progress`
+      `${apiUrl}/api/scan/${scanId}/progress`
     );
 
     eventSource.onmessage = (event) => {

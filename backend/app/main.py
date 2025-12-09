@@ -65,7 +65,9 @@ cors_origins = settings.get_cors_origins()
 if settings.is_production:
     cors_origins.extend([
         "https://spotsave.pandeylabs.com",
-        "https://www.spotsave.pandeylabs.com"
+        "https://www.spotsave.pandeylabs.com",
+        "https://pc35p58bek.us-east-1.awsapprunner.com",  # App Runner frontend
+        "http://pc35p58bek.us-east-1.awsapprunner.com",   # App Runner frontend (HTTP fallback)
     ])
 
 app.add_middleware(

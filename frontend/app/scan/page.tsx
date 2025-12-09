@@ -11,7 +11,15 @@ import { useToast } from "@/components/toaster";
 import Link from "next/link";
 import { Loader2, CheckCircle2 } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Use relative URLs to leverage Next.js rewrites (works in both dev and production)
+// In browser, use relative URLs; in SSR, use full URL
+const getApiUrl = () => {
+  if (typeof window !== 'undefined') {
+    return ''; // Use relative URLs in browser (Next.js rewrites will handle it)
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+};
+const API_URL = getApiUrl();
 
 // Extract AWS Account ID from Role ARN
 function extractAWSAccountId(roleArn: string): string | null {

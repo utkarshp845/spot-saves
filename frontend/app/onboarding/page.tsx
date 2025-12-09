@@ -641,7 +641,8 @@ function CredentialsFormComponent({ onBack, setupMethod }: { onBack: () => void;
     external_id: "",
   });
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  // Use relative URLs to leverage Next.js rewrites
+  const API_URL = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
