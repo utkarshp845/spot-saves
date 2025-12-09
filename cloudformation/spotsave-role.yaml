@@ -68,7 +68,37 @@ Resources:
         ZipFile: |
           import boto3
           import json
-          import cfnresponse
+          import uuid
+          import urllib3
+          import traceback
+
+          # Inline cfnresponse implementation
+          SUCCESS = "SUCCESS"
+          FAILED = "FAILED"
+          http = urllib3.PoolManager()
+
+          def send(event, context, responseStatus, responseData, physicalResourceId=None, noEcho=False):
+              responseUrl = event['ResponseURL']
+              responseBody = {
+                  'Status': responseStatus,
+                  'Reason': 'See the details in CloudWatch Log Stream: ' + context.log_stream_name,
+                  'PhysicalResourceId': physicalResourceId or context.log_stream_name,
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'NoEcho': noEcho,
+                  'Data': responseData
+              }
+              json_responseBody = json.dumps(responseBody)
+              headers = {
+                  'content-type': '',
+                  'content-length': str(len(json_responseBody))
+              }
+              try:
+                  response = http.request('PUT', responseUrl, body=json_responseBody.encode('utf-8'), headers=headers)
+                  print("Status code:", response.status)
+              except Exception as e:
+                  print("send(..) failed executing http.request(..):", str(e))
 
           iam = boto3.client('iam')
 
@@ -88,14 +118,8 @@ Resources:
               inline_policy_document = event['ResourceProperties'].get('InlinePolicyDocument', {})
               tags = event['ResourceProperties'].get('Tags', [])
               
-              # Generate external ID if not provided
-              import uuid
-              if external_id_param:
-                  external_id = external_id_param
-              else:
-                  external_id = str(uuid.uuid4())
-              
               response_data = {}
+              ssm = boto3.client('ssm')
               
               try:
                   # Check if role exists
@@ -108,11 +132,30 @@ Resources:
                       role_exists = False
                       print(f"Role {role_name} does not exist, will create it")
                   
+                  # Get or generate external ID
+                  if external_id_param:
+                      external_id = external_id_param
+                  else:
+                      # Try to get existing external ID from SSM
+                      ssm_param_name = f'/spotsave/{role_name}/external-id'
+                      try:
+                          existing_param = ssm.get_parameter(Name=ssm_param_name)
+                          external_id = existing_param['Parameter']['Value']
+                          print(f"Retrieved existing external ID from SSM: {ssm_param_name}")
+                      except Exception as e:
+                          # Parameter not found or other error - generate new external ID
+                          error_code = e.response.get('Error', {}).get('Code', '') if hasattr(e, 'response') else ''
+                          if error_code == 'ParameterNotFound':
+                              print(f"External ID not found in SSM, generating new one")
+                          else:
+                              print(f"Warning: Could not retrieve from SSM ({error_code}): {e}, generating new external ID")
+                          external_id = str(uuid.uuid4())
+                  
                   if request_type == 'Delete':
                       # On delete, we don't delete the role (let user manage it)
                       # Just return success
                       print(f"Delete requested for role {role_name}, but role will be retained")
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+                      send(event, context, SUCCESS, response_data)
                       return
                   
                   if not role_exists:
@@ -239,9 +282,7 @@ Resources:
                           print(f"Warning: Error handling inline policy {inline_policy_name}: {e}")
                           # Don't fail the whole operation if policy update fails
                   
-                  # Store external ID in SSM Parameter
-                  import boto3
-                  ssm = boto3.client('ssm')
+                  # Store external ID in SSM Parameter (if not already stored)
                   ssm_param_name = f'/spotsave/{role_name}/external-id'
                   try:
                       ssm.put_parameter(
@@ -260,12 +301,15 @@ Resources:
                   response_data['ExternalId'] = external_id
                   
                   print(f"Success! Role ARN: {role_arn}, External ID: {external_id}")
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+                  send(event, context, SUCCESS, response_data)
                   
               except Exception as e:
-                  print(f"Error: {str(e)}")
-                  response_data['Error'] = str(e)
-                  cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
+                  error_msg = str(e)
+                  error_trace = traceback.format_exc()
+                  print(f"Error: {error_msg}")
+                  print(f"Traceback: {error_trace}")
+                  response_data['Error'] = error_msg
+                  send(event, context, FAILED, response_data)
 
   # Custom resource that uses the Lambda to create/manage the role
   SpotSaveRole:
