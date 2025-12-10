@@ -72,6 +72,8 @@ Resources:
           import urllib.request
           import urllib.error
           import traceback
+          import time
+          from botocore.exceptions import ClientError
 
           # Inline cfnresponse implementation
           SUCCESS = "SUCCESS"
@@ -92,18 +94,28 @@ Resources:
               json_responseBody = json.dumps(responseBody)
               json_responseBody_bytes = json_responseBody.encode('utf-8')
               
-              try:
-                  req = urllib.request.Request(responseUrl, data=json_responseBody_bytes, method='PUT')
-                  req.add_header('Content-Type', '')
-                  req.add_header('Content-Length', str(len(json_responseBody_bytes)))
-                  
-                  with urllib.request.urlopen(req, timeout=30) as response:
-                      print(f"Status code: {response.getcode()}")
-              except urllib.error.HTTPError as e:
-                  print(f"HTTP Error: {e.code} - {e.reason}")
-              except Exception as e:
-                  print(f"send(..) failed: {str(e)}")
-                  raise
+              max_retries = 3
+              for attempt in range(max_retries):
+                  try:
+                      req = urllib.request.Request(responseUrl, data=json_responseBody_bytes, method='PUT')
+                      req.add_header('Content-Type', '')
+                      req.add_header('Content-Length', str(len(json_responseBody_bytes)))
+                      
+                      with urllib.request.urlopen(req, timeout=30) as response:
+                          status_code = response.getcode()
+                          print(f"Response sent successfully. Status code: {status_code}")
+                          if status_code == 200:
+                              return
+                  except urllib.error.HTTPError as e:
+                      print(f"HTTP Error (attempt {attempt + 1}/{max_retries}): {e.code} - {e.reason}")
+                      if attempt == max_retries - 1:
+                          raise
+                      time.sleep(1)
+                  except Exception as e:
+                      print(f"Error sending response (attempt {attempt + 1}/{max_retries}): {str(e)}")
+                      if attempt == max_retries - 1:
+                          raise
+                      time.sleep(1)
 
           iam = boto3.client('iam')
 
@@ -128,14 +140,22 @@ Resources:
               
               try:
                   # Check if role exists
+                  role_arn = None
                   try:
                       existing_role = iam.get_role(RoleName=role_name)
                       role_exists = True
                       role_arn = existing_role['Role']['Arn']
                       print(f"Role {role_name} already exists: {role_arn}")
-                  except iam.exceptions.NoSuchEntityException:
-                      role_exists = False
-                      print(f"Role {role_name} does not exist, will create it")
+                  except ClientError as e:
+                      error_code = e.response.get('Error', {}).get('Code', '')
+                      if error_code == 'NoSuchEntity':
+                          role_exists = False
+                          print(f"Role {role_name} does not exist, will create it")
+                      else:
+                          raise
+                  except Exception as e:
+                      print(f"Unexpected error checking role: {e}")
+                      raise
                   
                   # Get or generate external ID
                   if external_id_param:
@@ -256,8 +276,12 @@ Resources:
                               PolicyArn=policy_arn
                           )
                           print(f"Attached managed policy: {policy_arn}")
-                      except iam.exceptions.PolicyNotAttachableException as e:
-                          print(f"Warning: Could not attach policy {policy_arn}: {e}")
+                      except ClientError as e:
+                          error_code = e.response.get('Error', {}).get('Code', '')
+                          if error_code == 'PolicyNotAttachable':
+                              print(f"Warning: Could not attach policy {policy_arn}: {e}")
+                          else:
+                              raise
                       except Exception as e:
                           # Check if it got attached despite the error
                           try:
@@ -285,9 +309,13 @@ Resources:
                                   PolicyName=inline_policy_name,
                                   PolicyDocument=json.dumps(inline_policy_document)
                               )
-                          except iam.exceptions.NoSuchEntityException:
-                              # Policy doesn't exist, create it
-                              print(f"Creating inline policy: {inline_policy_name}")
+                          except ClientError as e:
+                              error_code = e.response.get('Error', {}).get('Code', '')
+                              if error_code == 'NoSuchEntity':
+                                  # Policy doesn't exist, create it
+                                  print(f"Creating inline policy: {inline_policy_name}")
+                              else:
+                                  raise
                               iam.put_role_policy(
                                   RoleName=role_name,
                                   PolicyName=inline_policy_name,
@@ -311,6 +339,10 @@ Resources:
                   except Exception as e:
                       print(f"Warning: Could not store in SSM: {e}")
                   
+                  # Ensure role_arn is set
+                  if not role_arn:
+                      raise Exception("role_arn was not set - this should not happen")
+                  
                   response_data['RoleArn'] = role_arn
                   response_data['RoleName'] = role_name
                   response_data['ExternalId'] = external_id
@@ -324,7 +356,16 @@ Resources:
                   print(f"Error: {error_msg}")
                   print(f"Traceback: {error_trace}")
                   response_data['Error'] = error_msg
-                  send(event, context, FAILED, response_data)
+                  try:
+                      send(event, context, FAILED, response_data)
+                  except Exception as send_error:
+                      print(f"CRITICAL: Failed to send FAILED response: {send_error}")
+                      # Last resort - try one more time
+                      try:
+                          send(event, context, FAILED, {'Error': 'Failed to send detailed error'})
+                      except:
+                          print("CRITICAL: Could not send any response to CloudFormation")
+                          raise
 
   # Custom resource that uses the Lambda to create/manage the role
   SpotSaveRole:
