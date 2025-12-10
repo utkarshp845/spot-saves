@@ -80,21 +80,27 @@ Resources:
                   body = {
                       'Status': status,
                       'Reason': f'See CloudWatch: {context.log_stream_name}',
-                      'PhysicalResourceId': context.log_stream_name,
+                      'PhysicalResourceId': event.get('PhysicalResourceId', context.log_stream_name),
                       'StackId': event['StackId'],
                       'RequestId': event['RequestId'],
                       'LogicalResourceId': event['LogicalResourceId'],
+                      'NoEcho': False,
                       'Data': data
                   }
+                  json_body = json.dumps(body)
+                  print(f"Sending response: Status={status}, Data keys={list(data.keys()) if data else 'empty'}")
                   req = urllib.request.Request(
                       event['ResponseURL'],
-                      data=json.dumps(body).encode('utf-8'),
+                      data=json_body.encode('utf-8'),
                       method='PUT',
-                      headers={'Content-Type': ''}
+                      headers={'Content-Type': 'application/json', 'Content-Length': str(len(json_body))}
                   )
-                  urllib.request.urlopen(req, timeout=10)
+                  response = urllib.request.urlopen(req, timeout=10)
+                  print(f"Response sent successfully: {response.getcode()}")
               except Exception as e:
                   print(f"Failed to send response: {e}")
+                  import traceback
+                  print(traceback.format_exc())
                   raise
 
           def lambda_handler(event, context):
@@ -103,7 +109,20 @@ Resources:
                   
                   props = event['ResourceProperties']
                   role_name = props['RoleName']
-                  account_id = props['SpotSaveAccountId']
+                  account_id = props.get('SpotSaveAccountId', '').strip()
+                  
+                  # Validate required parameters
+                  if not account_id:
+                      error_msg = "SpotSaveAccountId is required but was not provided. Please provide your SpotSave account ID."
+                      print(f"ERROR: {error_msg}")
+                      send(event, context, FAILED, {'Error': error_msg})
+                      return
+                  
+                  if not account_id.isdigit() or len(account_id) != 12:
+                      error_msg = f"Invalid SpotSaveAccountId: '{account_id}'. Must be a 12-digit AWS account ID."
+                      print(f"ERROR: {error_msg}")
+                      send(event, context, FAILED, {'Error': error_msg})
+                      return
                   
                   iam = boto3.client('iam')
                   ssm = boto3.client('ssm')
