@@ -69,13 +69,13 @@ Resources:
           import boto3
           import json
           import uuid
-          import urllib3
+          import urllib.request
+          import urllib.error
           import traceback
 
           # Inline cfnresponse implementation
           SUCCESS = "SUCCESS"
           FAILED = "FAILED"
-          http = urllib3.PoolManager()
 
           def send(event, context, responseStatus, responseData, physicalResourceId=None, noEcho=False):
               responseUrl = event['ResponseURL']
@@ -90,15 +90,20 @@ Resources:
                   'Data': responseData
               }
               json_responseBody = json.dumps(responseBody)
-              headers = {
-                  'content-type': '',
-                  'content-length': str(len(json_responseBody))
-              }
+              json_responseBody_bytes = json_responseBody.encode('utf-8')
+              
               try:
-                  response = http.request('PUT', responseUrl, body=json_responseBody.encode('utf-8'), headers=headers)
-                  print("Status code:", response.status)
+                  req = urllib.request.Request(responseUrl, data=json_responseBody_bytes, method='PUT')
+                  req.add_header('Content-Type', '')
+                  req.add_header('Content-Length', str(len(json_responseBody_bytes)))
+                  
+                  with urllib.request.urlopen(req, timeout=30) as response:
+                      print(f"Status code: {response.getcode()}")
+              except urllib.error.HTTPError as e:
+                  print(f"HTTP Error: {e.code} - {e.reason}")
               except Exception as e:
-                  print("send(..) failed executing http.request(..):", str(e))
+                  print(f"send(..) failed: {str(e)}")
+                  raise
 
           iam = boto3.client('iam')
 
@@ -144,11 +149,21 @@ Resources:
                           print(f"Retrieved existing external ID from SSM: {ssm_param_name}")
                       except Exception as e:
                           # Parameter not found or other error - generate new external ID
-                          error_code = e.response.get('Error', {}).get('Code', '') if hasattr(e, 'response') else ''
+                          error_code = ''
+                          if hasattr(e, 'response'):
+                              try:
+                                  error_code = e.response.get('Error', {}).get('Code', '')
+                              except:
+                                  pass
+                          elif hasattr(e, '__class__'):
+                              error_name = e.__class__.__name__
+                              if 'ParameterNotFound' in error_name or 'NotFound' in error_name:
+                                  error_code = 'ParameterNotFound'
+                          
                           if error_code == 'ParameterNotFound':
                               print(f"External ID not found in SSM, generating new one")
                           else:
-                              print(f"Warning: Could not retrieve from SSM ({error_code}): {e}, generating new external ID")
+                              print(f"Warning: Could not retrieve from SSM (error: {type(e).__name__}): {str(e)}, generating new external ID")
                           external_id = str(uuid.uuid4())
                   
                   if request_type == 'Delete':
