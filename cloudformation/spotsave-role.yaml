@@ -163,11 +163,12 @@ Resources:
                       role_arn = role['Role']['Arn']
                       print(f"Created role: {role_arn}")
                   else:
+                      # role_arn already set from line 114
                       iam.update_assume_role_policy(
                           RoleName=role_name,
                           PolicyDocument=json.dumps(policy)
                       )
-                      print(f"Updated role: {role_name}")
+                      print(f"Updated role: {role_name} (ARN: {role_arn})")
                   
                   # Attach policies
                   for policy_arn in props.get('ManagedPolicyArns', []):
