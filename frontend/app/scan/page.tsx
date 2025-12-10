@@ -11,26 +11,9 @@ import { useToast } from "@/components/toaster";
 import Link from "next/link";
 import { Loader2, CheckCircle2 } from "lucide-react";
 
-// Get API URL - smart detection for production vs development
-const getApiUrl = () => {
-  // In browser, detect production environment
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    // If running on App Runner (production), use the backend URL directly
-    if (hostname.includes('awsapprunner.com')) {
-      return 'https://pqykjsmmab.us-east-1.awsapprunner.com';
-    }
-    // If running on custom domain, construct backend URL or use relative
-    if (hostname.includes('spotsave.pandeylabs.com')) {
-      return 'https://pqykjsmmab.us-east-1.awsapprunner.com';
-    }
-    // Development: use relative URLs (Next.js rewrites will handle it)
-    return '';
-  }
-  // Server-side: use environment variable or default
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-};
-const API_URL = getApiUrl();
+// Always use relative URLs - Next.js rewrites will proxy to backend
+// This works in both development and production
+const API_URL = '';
 
 // Extract AWS Account ID from Role ARN
 function extractAWSAccountId(roleArn: string): string | null {
@@ -92,6 +75,14 @@ export default function ScanPage() {
     const contentType = response.headers.get("content-type");
     const text = await response.text();
     
+    console.log("Response details:", {
+      status: response.status,
+      statusText: response.statusText,
+      contentType,
+      url: response.url,
+      textPreview: text.substring(0, 200)
+    });
+    
     if (!text) {
       throw new Error(`Empty response from server (${response.status} ${response.statusText})`);
     }
@@ -100,11 +91,13 @@ export default function ScanPage() {
       try {
         return JSON.parse(text);
       } catch (e) {
+        console.error("JSON parse error:", e, "Text:", text);
         throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
       }
     }
     
     // Not JSON, return the text as error
+    console.error("Non-JSON response:", text);
     throw new Error(text || `Server error: ${response.status} ${response.statusText}`);
   };
 
@@ -114,8 +107,17 @@ export default function ScanPage() {
     setError(null);
 
     try {
+      // Use relative URL - Next.js rewrites will proxy to backend
+      const apiEndpoint = '/api/accounts';
+      console.log("Making request to:", apiEndpoint);
+      console.log("Request body:", {
+        account_name: formData.account_name || "One-time Scan",
+        role_arn: formData.role_arn,
+        external_id: formData.external_id ? "***" : "",
+      });
+      
       // First, create/update the account
-      const accountResponse = await fetch(`${API_URL}/api/accounts`, {
+      const accountResponse = await fetch(apiEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -126,6 +128,8 @@ export default function ScanPage() {
           external_id: formData.external_id,
         }),
       });
+      
+      console.log("Account response status:", accountResponse.status, accountResponse.statusText);
 
       if (!accountResponse.ok) {
         const errorData = await safeJsonParse(accountResponse);
@@ -133,9 +137,12 @@ export default function ScanPage() {
       }
 
       const account = await safeJsonParse(accountResponse);
+      console.log("Account created:", account);
 
       // Trigger the scan
-      const scanResponse = await fetch(`${API_URL}/api/scan`, {
+      const scanEndpoint = '/api/scan';
+      console.log("Making scan request to:", scanEndpoint);
+      const scanResponse = await fetch(scanEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

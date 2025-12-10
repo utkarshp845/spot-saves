@@ -8,10 +8,14 @@ from typing import Optional
 
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
 from starlette.requests import Request as StarletteRequest
+from starlette.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from sqlmodel import Session, select
+from sqlalchemy.exc import SQLAlchemyError
+import traceback
 
 from app.config import settings
 from app.logging_config import setup_logging, get_logger
@@ -80,6 +84,41 @@ app.add_middleware(
 
 # Response compression for faster API responses
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Global exception handlers
+@app.exception_handler(Exception)
+async def global_exception_handler(request: StarletteRequest, exc: Exception):
+    """Handle all unhandled exceptions."""
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": str(exc),
+            "type": type(exc).__name__,
+            "path": str(request.url)
+        }
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: StarletteRequest, exc: RequestValidationError):
+    """Handle request validation errors."""
+    logger.error(f"Validation error: {exc.errors()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()}
+    )
+
+@app.exception_handler(SQLAlchemyError)
+async def database_exception_handler(request: StarletteRequest, exc: SQLAlchemyError):
+    """Handle database errors."""
+    logger.error(f"Database error: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Database error occurred",
+            "type": "DatabaseError"
+        }
+    )
 
 # Security headers middleware
 @app.middleware("http")
@@ -255,39 +294,65 @@ async def create_account(
     session: Session = Depends(get_session)
 ):
     """Create or update an AWS account connection."""
-    # Check if account already exists
-    existing = session.exec(
-        select(Account).where(Account.role_arn == account_data.role_arn)
-    ).first()
-    
-    if existing:
-        # Update existing account
-        existing.account_name = account_data.account_name
-        existing.external_id = account_data.external_id
-        existing.is_active = True
-        existing.aws_account_id = extract_aws_account_id(account_data.role_arn)
-        if user_id:
-            existing.user_id = user_id
-        session.add(existing)
+    try:
+        logger.info(f"Creating/updating account: {account_data.account_name}, Role ARN: {account_data.role_arn[:50]}...")
+        
+        # Validate role ARN format
+        if not account_data.role_arn or not account_data.role_arn.startswith("arn:aws:iam::"):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid Role ARN format. Must start with 'arn:aws:iam::'"
+            )
+        
+        # Check if account already exists
+        existing = session.exec(
+            select(Account).where(Account.role_arn == account_data.role_arn)
+        ).first()
+        
+        if existing:
+            # Update existing account
+            logger.info(f"Updating existing account ID: {existing.id}")
+            existing.account_name = account_data.account_name
+            existing.external_id = account_data.external_id
+            existing.is_active = True
+            existing.aws_account_id = extract_aws_account_id(account_data.role_arn)
+            if user_id:
+                existing.user_id = user_id
+            session.add(existing)
+            session.commit()
+            session.refresh(existing)
+            return existing
+        
+        # Extract AWS account ID from Role ARN
+        aws_account_id = extract_aws_account_id(account_data.role_arn)
+        if not aws_account_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Could not extract AWS Account ID from Role ARN"
+            )
+        
+        # Create new account
+        account = Account(
+            account_name=account_data.account_name,
+            aws_account_id=aws_account_id,
+            role_arn=account_data.role_arn,
+            external_id=account_data.external_id,
+            user_id=user_id
+        )
+        session.add(account)
         session.commit()
-        session.refresh(existing)
-        return existing
-    
-    # Extract AWS account ID from Role ARN
-    aws_account_id = extract_aws_account_id(account_data.role_arn)
-    
-    # Create new account
-    account = Account(
-        account_name=account_data.account_name,
-        aws_account_id=aws_account_id,
-        role_arn=account_data.role_arn,
-        external_id=account_data.external_id,
-        user_id=user_id
-    )
-    session.add(account)
-    session.commit()
-    session.refresh(account)
-    return account
+        session.refresh(account)
+        logger.info(f"Created new account ID: {account.id}")
+        return account
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating account: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create account: {str(e)}"
+        )
 
 
 @app.get("/api/accounts", response_model=list[AccountResponse])

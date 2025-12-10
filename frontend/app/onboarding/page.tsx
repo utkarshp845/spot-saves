@@ -642,17 +642,8 @@ function CredentialsFormComponent({ onBack, setupMethod }: { onBack: () => void;
   });
 
   // Get API URL - smart detection for production vs development
-  const getApiUrl = () => {
-    if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
-      if (hostname.includes('awsapprunner.com') || hostname.includes('spotsave.pandeylabs.com')) {
-        return 'https://pqykjsmmab.us-east-1.awsapprunner.com';
-      }
-      return '';
-    }
-    return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-  };
-  const API_URL = getApiUrl();
+  // Always use relative URLs - Next.js rewrites will proxy to backend
+  const API_URL = '';
 
   // Helper function to safely parse JSON from response
   const safeJsonParse = async (response: Response): Promise<any> => {

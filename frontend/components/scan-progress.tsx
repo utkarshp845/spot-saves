@@ -32,20 +32,8 @@ export function ScanProgress({ scanId, onComplete }: ScanProgressProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // EventSource needs full URL
-    let apiUrl: string;
-    if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
-      // Production: use backend URL directly
-      if (hostname.includes('awsapprunner.com') || hostname.includes('spotsave.pandeylabs.com')) {
-        apiUrl = 'https://pqykjsmmab.us-east-1.awsapprunner.com';
-      } else {
-        // Development: use current origin (Next.js rewrite will handle it)
-        apiUrl = window.location.origin;
-      }
-    } else {
-      apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    }
+    // EventSource needs full URL - use current origin, Next.js rewrites will proxy
+    const apiUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000");
     const eventSource = new EventSource(
       `${apiUrl}/api/scan/${scanId}/progress`
     );

@@ -11,18 +11,8 @@ import { ScanProgress } from "@/components/scan-progress";
 import { Loader2, Download, RefreshCw, ArrowLeft } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 
-// Get API URL - smart detection for production vs development
-const getApiUrl = () => {
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    if (hostname.includes('awsapprunner.com') || hostname.includes('spotsave.pandeylabs.com')) {
-      return 'https://pqykjsmmab.us-east-1.awsapprunner.com';
-    }
-    return '';
-  }
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-};
-const API_URL = getApiUrl();
+// Always use relative URLs - Next.js rewrites will proxy to backend
+const API_URL = '';
 
 interface DashboardData {
   total_potential_savings_annual: number;
@@ -72,8 +62,8 @@ function DashboardContent() {
   const fetchDashboard = async () => {
     try {
       const url = accountId
-        ? `${API_URL}/api/dashboard?account_id=${accountId}`
-        : `${API_URL}/api/dashboard`;
+        ? `/api/dashboard?account_id=${accountId}`
+        : `/api/dashboard`;
 
       const response = await fetch(url);
       if (!response.ok) {
@@ -87,7 +77,7 @@ function DashboardContent() {
       // Check scan status if we have a scan ID
       if (scanId) {
         try {
-          const scanResponse = await fetch(`${API_URL}/api/scan/${scanId}`);
+          const scanResponse = await fetch(`/api/scan/${scanId}`);
           if (scanResponse.ok) {
             const scanData = await safeJsonParse(scanResponse);
             setScanStatus(scanData.status);
@@ -135,7 +125,7 @@ function DashboardContent() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/dashboard/export/${scanId}`);
+      const response = await fetch(`/api/dashboard/export/${scanId}`);
       if (!response.ok) {
         const errorData = await safeJsonParse(response).catch(() => null);
         throw new Error(errorData?.detail || errorData?.message || `Failed to export data (${response.status})`);
