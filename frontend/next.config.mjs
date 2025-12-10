@@ -6,7 +6,13 @@ const nextConfig = {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
   },
   async rewrites() {
-    const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    // In production (App Runner), use the backend URL from environment
+    // In development, use localhost
+    const backendUrl = process.env.BACKEND_URL || 
+                      process.env.NEXT_PUBLIC_API_URL || 
+                      (process.env.NODE_ENV === 'production' 
+                        ? 'https://pqykjsmmab.us-east-1.awsapprunner.com' 
+                        : 'http://localhost:8000');
     return [
       {
         source: '/api/:path*',

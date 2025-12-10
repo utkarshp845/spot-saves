@@ -18,7 +18,16 @@ class Settings(BaseSettings):
     # Application
     app_name: str = "SpotSave API"
     app_version: str = "1.0.0"
-    environment: str = Field(default="development", pattern="^(development|staging|production)$")
+    environment: str = Field(
+        default_factory=lambda: (
+            "production" if (
+                os.getenv("ENVIRONMENT") == "production" or
+                os.getenv("ENV") == "production" or
+                os.getenv("NODE_ENV") == "production"
+            ) else "development"
+        ),
+        pattern="^(development|staging|production)$"
+    )
     debug: bool = Field(default=False)
     
     # API
@@ -38,10 +47,19 @@ class Settings(BaseSettings):
     @classmethod
     def normalize_database_url(cls, v: str) -> str:
         """Normalize database URL for production environments."""
+        import os
+        # Check multiple ways to detect production
+        is_production = (
+            os.getenv("ENVIRONMENT") == "production" or
+            os.getenv("ENV") == "production" or
+            os.getenv("NODE_ENV") == "production" or
+            # If DATABASE_URL is not explicitly set, assume production needs /app/data
+            (not os.getenv("DATABASE_URL") and not v)
+        )
+        
         # If no DATABASE_URL is set and we're in production, use /app/data directory
         if not v or v == "sqlite:///./spotsave.db":
-            import os
-            if os.getenv("ENVIRONMENT") == "production" or os.getenv("ENV") == "production":
+            if is_production:
                 return "sqlite:////app/data/spotsave.db"
         return v
     database_pool_size: int = Field(default=5, ge=1, le=20)

@@ -62,9 +62,10 @@ def init_db() -> None:
         logger.info(f"Initializing database: {DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL}")
         SQLModel.metadata.create_all(engine)
         logger.info("Database initialized successfully")
-        # Test write access
+        # Test write access with a simple query
+        from sqlalchemy import text
         with Session(engine) as test_session:
-            test_session.exec("SELECT 1").first()
+            test_session.exec(text("SELECT 1")).first()
         logger.info("Database write test passed")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}", exc_info=True)
