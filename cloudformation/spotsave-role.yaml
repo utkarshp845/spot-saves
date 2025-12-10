@@ -141,217 +141,217 @@ Resources:
                   ssm = boto3.client('ssm')
                   
                   try:
-                  # Check if role exists
-                  role_arn = None
-                  try:
-                      existing_role = iam.get_role(RoleName=role_name)
-                      role_exists = True
-                      role_arn = existing_role['Role']['Arn']
-                      print(f"Role {role_name} already exists: {role_arn}")
-                  except ClientError as e:
-                      error_code = e.response.get('Error', {}).get('Code', '')
-                      if error_code == 'NoSuchEntity':
-                          role_exists = False
-                          print(f"Role {role_name} does not exist, will create it")
-                      else:
-                          raise
-                  except Exception as e:
-                      print(f"Unexpected error checking role: {e}")
-                      raise
-                  
-                  # Get or generate external ID
-                  if external_id_param:
-                      external_id = external_id_param
-                  else:
-                      # Try to get existing external ID from SSM
-                      ssm_param_name = f'/spotsave/{role_name}/external-id'
+                      # Check if role exists
+                      role_arn = None
                       try:
-                          existing_param = ssm.get_parameter(Name=ssm_param_name)
-                          external_id = existing_param['Parameter']['Value']
-                          print(f"Retrieved existing external ID from SSM: {ssm_param_name}")
-                      except Exception as e:
-                          # Parameter not found or other error - generate new external ID
-                          error_code = ''
-                          if hasattr(e, 'response'):
-                              try:
-                                  error_code = e.response.get('Error', {}).get('Code', '')
-                              except:
-                                  pass
-                          elif hasattr(e, '__class__'):
-                              error_name = e.__class__.__name__
-                              if 'ParameterNotFound' in error_name or 'NotFound' in error_name:
-                                  error_code = 'ParameterNotFound'
-                          
-                          if error_code == 'ParameterNotFound':
-                              print(f"External ID not found in SSM, generating new one")
-                          else:
-                              print(f"Warning: Could not retrieve from SSM (error: {type(e).__name__}): {str(e)}, generating new external ID")
-                          external_id = str(uuid.uuid4())
-                  
-                  if request_type == 'Delete':
-                      # On delete, we don't delete the role (let user manage it)
-                      # Just return success
-                      print(f"Delete requested for role {role_name}, but role will be retained")
-                      send(event, context, SUCCESS, response_data)
-                      return
-                  
-                  if not role_exists:
-                      # Create the role
-                      print(f"Creating role {role_name}...")
-                      
-                      # Build assume role policy
-                      assume_role_policy = {
-                          "Version": "2012-10-17",
-                          "Statement": [
-                              {
-                                  "Effect": "Allow",
-                                  "Principal": {
-                                      "AWS": f"arn:aws:iam::{spotsave_account_id}:root"
-                                  },
-                                  "Action": "sts:AssumeRole"
-                              }
-                          ]
-                      }
-                      
-                      # Add external ID condition if provided
-                      if external_id:
-                          assume_role_policy["Statement"][0]["Condition"] = {
-                              "StringEquals": {
-                                  "sts:ExternalId": external_id
-                              }
-                          }
-                      
-                      # Create role
-                      create_role_response = iam.create_role(
-                          RoleName=role_name,
-                          AssumeRolePolicyDocument=json.dumps(assume_role_policy),
-                          Tags=[{'Key': tag['Key'], 'Value': tag['Value']} for tag in tags] if tags else []
-                      )
-                      role_arn = create_role_response['Role']['Arn']
-                      print(f"Role created: {role_arn}")
-                  else:
-                      # Role exists - update assume role policy if needed
-                      print(f"Updating assume role policy for existing role {role_name}...")
-                      
-                      assume_role_policy = {
-                          "Version": "2012-10-17",
-                          "Statement": [
-                              {
-                                  "Effect": "Allow",
-                                  "Principal": {
-                                      "AWS": f"arn:aws:iam::{spotsave_account_id}:root"
-                                  },
-                                  "Action": "sts:AssumeRole"
-                              }
-                          ]
-                      }
-                      
-                      if external_id:
-                          assume_role_policy["Statement"][0]["Condition"] = {
-                              "StringEquals": {
-                                  "sts:ExternalId": external_id
-                              }
-                          }
-                      
-                      iam.update_assume_role_policy(
-                          RoleName=role_name,
-                          PolicyDocument=json.dumps(assume_role_policy)
-                      )
-                  
-                  # Attach managed policies (idempotent - safe to call multiple times)
-                  # First, check which policies are already attached
-                  try:
-                      attached_policies_response = iam.list_attached_role_policies(RoleName=role_name)
-                      attached_policy_arns = [p['PolicyArn'] for p in attached_policies_response['AttachedPolicies']]
-                  except Exception as e:
-                      print(f"Warning: Could not list attached policies: {e}")
-                      attached_policy_arns = []
-                  
-                  for policy_arn in managed_policy_arns:
-                      if policy_arn in attached_policy_arns:
-                          print(f"Policy {policy_arn} already attached, skipping")
-                          continue
-                      
-                      try:
-                          iam.attach_role_policy(
-                              RoleName=role_name,
-                              PolicyArn=policy_arn
-                          )
-                          print(f"Attached managed policy: {policy_arn}")
+                          existing_role = iam.get_role(RoleName=role_name)
+                          role_exists = True
+                          role_arn = existing_role['Role']['Arn']
+                          print(f"Role {role_name} already exists: {role_arn}")
                       except ClientError as e:
                           error_code = e.response.get('Error', {}).get('Code', '')
-                          if error_code == 'PolicyNotAttachable':
-                              print(f"Warning: Could not attach policy {policy_arn}: {e}")
+                          if error_code == 'NoSuchEntity':
+                              role_exists = False
+                              print(f"Role {role_name} does not exist, will create it")
                           else:
                               raise
                       except Exception as e:
-                          # Check if it got attached despite the error
+                          print(f"Unexpected error checking role: {e}")
+                          raise
+                      
+                      # Get or generate external ID
+                      if external_id_param:
+                          external_id = external_id_param
+                      else:
+                          # Try to get existing external ID from SSM
+                          ssm_param_name = f'/spotsave/{role_name}/external-id'
                           try:
-                              attached_policies = iam.list_attached_role_policies(RoleName=role_name)
-                              if policy_arn in [p['PolicyArn'] for p in attached_policies['AttachedPolicies']]:
-                                  print(f"Policy {policy_arn} is now attached")
+                              existing_param = ssm.get_parameter(Name=ssm_param_name)
+                              external_id = existing_param['Parameter']['Value']
+                              print(f"Retrieved existing external ID from SSM: {ssm_param_name}")
+                          except Exception as e:
+                              # Parameter not found or other error - generate new external ID
+                              error_code = ''
+                              if hasattr(e, 'response'):
+                                  try:
+                                      error_code = e.response.get('Error', {}).get('Code', '')
+                                  except:
+                                      pass
+                              elif hasattr(e, '__class__'):
+                                  error_name = e.__class__.__name__
+                                  if 'ParameterNotFound' in error_name or 'NotFound' in error_name:
+                                      error_code = 'ParameterNotFound'
+                              
+                              if error_code == 'ParameterNotFound':
+                                  print(f"External ID not found in SSM, generating new one")
                               else:
-                                  print(f"Warning: Error attaching policy {policy_arn}: {e}")
-                          except:
-                              print(f"Warning: Error verifying policy attachment {policy_arn}: {e}")
-                  
-                  # Handle inline policy (check if exists first, then create or update)
-                  if inline_policy_name and inline_policy_document:
+                                  print(f"Warning: Could not retrieve from SSM (error: {type(e).__name__}): {str(e)}, generating new external ID")
+                              external_id = str(uuid.uuid4())
+                      
+                      if request_type == 'Delete':
+                          # On delete, we don't delete the role (let user manage it)
+                          # Just return success
+                          print(f"Delete requested for role {role_name}, but role will be retained")
+                          send(event, context, SUCCESS, response_data)
+                          return
+                      
+                      if not role_exists:
+                          # Create the role
+                          print(f"Creating role {role_name}...")
+                          
+                          # Build assume role policy
+                          assume_role_policy = {
+                              "Version": "2012-10-17",
+                              "Statement": [
+                                  {
+                                      "Effect": "Allow",
+                                      "Principal": {
+                                          "AWS": f"arn:aws:iam::{spotsave_account_id}:root"
+                                      },
+                                      "Action": "sts:AssumeRole"
+                                  }
+                              ]
+                          }
+                          
+                          # Add external ID condition if provided
+                          if external_id:
+                              assume_role_policy["Statement"][0]["Condition"] = {
+                                  "StringEquals": {
+                                      "sts:ExternalId": external_id
+                                  }
+                              }
+                          
+                          # Create role
+                          create_role_response = iam.create_role(
+                              RoleName=role_name,
+                              AssumeRolePolicyDocument=json.dumps(assume_role_policy),
+                              Tags=[{'Key': tag['Key'], 'Value': tag['Value']} for tag in tags] if tags else []
+                          )
+                          role_arn = create_role_response['Role']['Arn']
+                          print(f"Role created: {role_arn}")
+                      else:
+                          # Role exists - update assume role policy if needed
+                          print(f"Updating assume role policy for existing role {role_name}...")
+                          
+                          assume_role_policy = {
+                              "Version": "2012-10-17",
+                              "Statement": [
+                                  {
+                                      "Effect": "Allow",
+                                      "Principal": {
+                                          "AWS": f"arn:aws:iam::{spotsave_account_id}:root"
+                                      },
+                                      "Action": "sts:AssumeRole"
+                                  }
+                              ]
+                          }
+                          
+                          if external_id:
+                              assume_role_policy["Statement"][0]["Condition"] = {
+                                  "StringEquals": {
+                                      "sts:ExternalId": external_id
+                                  }
+                              }
+                          
+                          iam.update_assume_role_policy(
+                              RoleName=role_name,
+                              PolicyDocument=json.dumps(assume_role_policy)
+                          )
+                      
+                      # Attach managed policies (idempotent - safe to call multiple times)
+                      # First, check which policies are already attached
                       try:
-                          # Try to get existing policy
+                          attached_policies_response = iam.list_attached_role_policies(RoleName=role_name)
+                          attached_policy_arns = [p['PolicyArn'] for p in attached_policies_response['AttachedPolicies']]
+                      except Exception as e:
+                          print(f"Warning: Could not list attached policies: {e}")
+                          attached_policy_arns = []
+                      
+                      for policy_arn in managed_policy_arns:
+                          if policy_arn in attached_policy_arns:
+                              print(f"Policy {policy_arn} already attached, skipping")
+                              continue
+                          
                           try:
-                              existing_policy = iam.get_role_policy(
+                              iam.attach_role_policy(
                                   RoleName=role_name,
-                                  PolicyName=inline_policy_name
+                                  PolicyArn=policy_arn
                               )
-                              # Policy exists, update it
-                              print(f"Updating existing inline policy: {inline_policy_name}")
-                              iam.put_role_policy(
-                                  RoleName=role_name,
-                                  PolicyName=inline_policy_name,
-                                  PolicyDocument=json.dumps(inline_policy_document)
-                              )
+                              print(f"Attached managed policy: {policy_arn}")
                           except ClientError as e:
                               error_code = e.response.get('Error', {}).get('Code', '')
-                              if error_code == 'NoSuchEntity':
-                                  # Policy doesn't exist, create it
-                                  print(f"Creating inline policy: {inline_policy_name}")
+                              if error_code == 'PolicyNotAttachable':
+                                  print(f"Warning: Could not attach policy {policy_arn}: {e}")
+                              else:
+                                  raise
+                          except Exception as e:
+                              # Check if it got attached despite the error
+                              try:
+                                  attached_policies = iam.list_attached_role_policies(RoleName=role_name)
+                                  if policy_arn in [p['PolicyArn'] for p in attached_policies['AttachedPolicies']]:
+                                      print(f"Policy {policy_arn} is now attached")
+                                  else:
+                                      print(f"Warning: Error attaching policy {policy_arn}: {e}")
+                              except:
+                                  print(f"Warning: Error verifying policy attachment {policy_arn}: {e}")
+                      
+                      # Handle inline policy (check if exists first, then create or update)
+                      if inline_policy_name and inline_policy_document:
+                          try:
+                              # Try to get existing policy
+                              try:
+                                  existing_policy = iam.get_role_policy(
+                                      RoleName=role_name,
+                                      PolicyName=inline_policy_name
+                                  )
+                                  # Policy exists, update it
+                                  print(f"Updating existing inline policy: {inline_policy_name}")
                                   iam.put_role_policy(
                                       RoleName=role_name,
                                       PolicyName=inline_policy_name,
                                       PolicyDocument=json.dumps(inline_policy_document)
                                   )
-                              else:
-                                  raise
+                              except ClientError as e:
+                                  error_code = e.response.get('Error', {}).get('Code', '')
+                                  if error_code == 'NoSuchEntity':
+                                      # Policy doesn't exist, create it
+                                      print(f"Creating inline policy: {inline_policy_name}")
+                                      iam.put_role_policy(
+                                          RoleName=role_name,
+                                          PolicyName=inline_policy_name,
+                                          PolicyDocument=json.dumps(inline_policy_document)
+                                      )
+                                  else:
+                                      raise
+                          except Exception as e:
+                              print(f"Warning: Error handling inline policy {inline_policy_name}: {e}")
+                              # Don't fail the whole operation if policy update fails
+                      
+                      # Store external ID in SSM Parameter (if not already stored)
+                      ssm_param_name = f'/spotsave/{role_name}/external-id'
+                      try:
+                          ssm.put_parameter(
+                              Name=ssm_param_name,
+                              Value=external_id,
+                              Type='String',
+                              Description='SpotSave External ID - Keep this secure',
+                              Overwrite=True
+                          )
+                          print(f"Stored external ID in SSM: {ssm_param_name}")
                       except Exception as e:
-                          print(f"Warning: Error handling inline policy {inline_policy_name}: {e}")
-                          # Don't fail the whole operation if policy update fails
-                  
-                  # Store external ID in SSM Parameter (if not already stored)
-                  ssm_param_name = f'/spotsave/{role_name}/external-id'
-                  try:
-                      ssm.put_parameter(
-                          Name=ssm_param_name,
-                          Value=external_id,
-                          Type='String',
-                          Description='SpotSave External ID - Keep this secure',
-                          Overwrite=True
-                      )
-                      print(f"Stored external ID in SSM: {ssm_param_name}")
-                  except Exception as e:
-                      print(f"Warning: Could not store in SSM: {e}")
-                  
-                  # Ensure role_arn is set
-                  if not role_arn:
-                      raise Exception("role_arn was not set - this should not happen")
-                  
-                  response_data['RoleArn'] = role_arn
-                  response_data['RoleName'] = role_name
-                  response_data['ExternalId'] = external_id
-                  
-                  print(f"Success! Role ARN: {role_arn}, External ID: {external_id}")
-                  send(event, context, SUCCESS, response_data)
-                  
+                          print(f"Warning: Could not store in SSM: {e}")
+                      
+                      # Ensure role_arn is set
+                      if not role_arn:
+                          raise Exception("role_arn was not set - this should not happen")
+                      
+                      response_data['RoleArn'] = role_arn
+                      response_data['RoleName'] = role_name
+                      response_data['ExternalId'] = external_id
+                      
+                      print(f"Success! Role ARN: {role_arn}, External ID: {external_id}")
+                      send(event, context, SUCCESS, response_data)
+                      
                   except Exception as e:
                       error_msg = str(e)
                       error_trace = traceback.format_exc()
