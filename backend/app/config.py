@@ -33,6 +33,17 @@ class Settings(BaseSettings):
         default="sqlite:///./spotsave.db",
         description="Database connection URL (SQLite or PostgreSQL)"
     )
+    
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, v: str) -> str:
+        """Normalize database URL for production environments."""
+        # If no DATABASE_URL is set and we're in production, use /app/data directory
+        if not v or v == "sqlite:///./spotsave.db":
+            import os
+            if os.getenv("ENVIRONMENT") == "production" or os.getenv("ENV") == "production":
+                return "sqlite:////app/data/spotsave.db"
+        return v
     database_pool_size: int = Field(default=5, ge=1, le=20)
     database_max_overflow: int = Field(default=10, ge=0)
     database_pool_timeout: int = Field(default=30, ge=1)

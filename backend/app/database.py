@@ -17,13 +17,29 @@ DATABASE_URL = settings.get_database_url()
 # Ensure the database directory exists for SQLite
 if DATABASE_URL.startswith("sqlite"):
     db_path = DATABASE_URL.replace("sqlite:///", "")
+    # Handle both relative (./) and absolute (/app/data/) paths
+    if db_path.startswith("/"):
+        # Absolute path
+        db_path = db_path
+    else:
+        # Relative path - convert to absolute
+        db_path = str(Path(db_path).resolve())
+    
     if db_path != ":memory:":
         db_dir = Path(db_path).parent
-        if db_dir != Path("."):
+        try:
             db_dir.mkdir(parents=True, exist_ok=True)
+            # Ensure directory is writable
+            os.chmod(db_dir, 0o777)
+            logger.info(f"Database directory ensured: {db_dir}")
+        except Exception as e:
+            logger.error(f"Failed to create database directory {db_dir}: {e}")
+            raise
+    
     # SQLite connection args
     connect_args = {"check_same_thread": False}
     engine_kwargs = {"connect_args": connect_args}
+    logger.info(f"Using SQLite database at: {db_path}")
 else:
     # PostgreSQL connection args
     connect_args = {}
@@ -43,11 +59,15 @@ engine: SQLAlchemyEngine = create_engine(DATABASE_URL, **engine_kwargs)
 def init_db() -> None:
     """Initialize the database by creating all tables."""
     try:
+        logger.info(f"Initializing database: {DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL}")
         SQLModel.metadata.create_all(engine)
         logger.info("Database initialized successfully")
-        logger.info(f"Database URL: {DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else 'SQLite'}")
+        # Test write access
+        with Session(engine) as test_session:
+            test_session.exec("SELECT 1").first()
+        logger.info("Database write test passed")
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
+        logger.error(f"Failed to initialize database: {e}", exc_info=True)
         raise
 
 
