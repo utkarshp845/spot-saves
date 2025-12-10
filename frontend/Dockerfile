@@ -33,6 +33,10 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
+# Create empty .env file to prevent Next.js errors if it tries to read it
+# Environment variables should be set via App Runner configuration, not .env files
+RUN touch .env
+
 # Copy and make entrypoint executable
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
