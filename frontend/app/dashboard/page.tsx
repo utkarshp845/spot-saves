@@ -48,6 +48,27 @@ function DashboardContent() {
   const [error, setError] = useState<string | null>(null);
   const [scanStatus, setScanStatus] = useState<string | null>(null);
 
+  // Helper function to safely parse JSON from response
+  const safeJsonParse = async (response: Response): Promise<any> => {
+    const contentType = response.headers.get("content-type");
+    const text = await response.text();
+    
+    if (!text) {
+      throw new Error(`Empty response from server (${response.status} ${response.statusText})`);
+    }
+    
+    if (contentType && contentType.includes("application/json")) {
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
+      }
+    }
+    
+    // Not JSON, return the text as error
+    throw new Error(text || `Server error: ${response.status} ${response.statusText}`);
+  };
+
   const fetchDashboard = async () => {
     try {
       const url = accountId
@@ -56,10 +77,11 @@ function DashboardContent() {
 
       const response = await fetch(url);
       if (!response.ok) {
-        throw new Error("Failed to fetch dashboard data");
+        const errorData = await safeJsonParse(response).catch(() => null);
+        throw new Error(errorData?.detail || errorData?.message || `Failed to fetch dashboard data (${response.status})`);
       }
 
-      const dashboardData = await response.json();
+      const dashboardData = await safeJsonParse(response);
       setData(dashboardData);
 
       // Check scan status if we have a scan ID
@@ -67,7 +89,7 @@ function DashboardContent() {
         try {
           const scanResponse = await fetch(`${API_URL}/api/scan/${scanId}`);
           if (scanResponse.ok) {
-            const scanData = await scanResponse.json();
+            const scanData = await safeJsonParse(scanResponse);
             setScanStatus(scanData.status);
             if (scanData.status === "running") {
               setPolling(false); // Use SSE instead
@@ -82,7 +104,8 @@ function DashboardContent() {
         setPolling(false);
       }
     } catch (err: any) {
-      setError(err.message);
+      console.error("Dashboard fetch error:", err);
+      setError(err.message || "Failed to load dashboard");
     } finally {
       setLoading(false);
     }
@@ -114,10 +137,11 @@ function DashboardContent() {
     try {
       const response = await fetch(`${API_URL}/api/dashboard/export/${scanId}`);
       if (!response.ok) {
-        throw new Error("Failed to export data");
+        const errorData = await safeJsonParse(response).catch(() => null);
+        throw new Error(errorData?.detail || errorData?.message || `Failed to export data (${response.status})`);
       }
 
-      const jsonData = await response.json();
+      const jsonData = await safeJsonParse(response);
       const blob = new Blob([JSON.stringify(jsonData, null, 2)], {
         type: "application/json",
       });

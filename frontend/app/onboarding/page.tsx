@@ -654,6 +654,27 @@ function CredentialsFormComponent({ onBack, setupMethod }: { onBack: () => void;
   };
   const API_URL = getApiUrl();
 
+  // Helper function to safely parse JSON from response
+  const safeJsonParse = async (response: Response): Promise<any> => {
+    const contentType = response.headers.get("content-type");
+    const text = await response.text();
+    
+    if (!text) {
+      throw new Error(`Empty response from server (${response.status} ${response.statusText})`);
+    }
+    
+    if (contentType && contentType.includes("application/json")) {
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
+      }
+    }
+    
+    // Not JSON, return the text as error
+    throw new Error(text || `Server error: ${response.status} ${response.statusText}`);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -671,11 +692,11 @@ function CredentialsFormComponent({ onBack, setupMethod }: { onBack: () => void;
       });
 
       if (!accountResponse.ok) {
-        const errorData = await accountResponse.json();
-        throw new Error(errorData.detail || "Failed to create account");
+        const errorData = await safeJsonParse(accountResponse);
+        throw new Error(errorData.detail || errorData.message || `Failed to create account (${accountResponse.status})`);
       }
 
-      const account = await accountResponse.json();
+      const account = await safeJsonParse(accountResponse);
 
       const scanResponse = await fetch(`${API_URL}/api/scan`, {
         method: "POST",
@@ -687,12 +708,14 @@ function CredentialsFormComponent({ onBack, setupMethod }: { onBack: () => void;
       });
 
       if (!scanResponse.ok) {
-        throw new Error("Failed to start scan");
+        const errorData = await safeJsonParse(scanResponse);
+        throw new Error(errorData.detail || errorData.message || `Failed to start scan (${scanResponse.status})`);
       }
 
-      const scan = await scanResponse.json();
+      const scan = await safeJsonParse(scanResponse);
       router.push(`/dashboard?account_id=${account.id}&scan_id=${scan.scan_id}`);
     } catch (err: any) {
+      console.error("Onboarding error:", err);
       setError(err.message || "An error occurred");
       setLoading(false);
     }

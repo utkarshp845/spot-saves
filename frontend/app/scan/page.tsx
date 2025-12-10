@@ -87,6 +87,27 @@ export default function ScanPage() {
     }
   };
 
+  // Helper function to safely parse JSON from response
+  const safeJsonParse = async (response: Response): Promise<any> => {
+    const contentType = response.headers.get("content-type");
+    const text = await response.text();
+    
+    if (!text) {
+      throw new Error(`Empty response from server (${response.status} ${response.statusText})`);
+    }
+    
+    if (contentType && contentType.includes("application/json")) {
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
+      }
+    }
+    
+    // Not JSON, return the text as error
+    throw new Error(text || `Server error: ${response.status} ${response.statusText}`);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -107,11 +128,11 @@ export default function ScanPage() {
       });
 
       if (!accountResponse.ok) {
-        const errorData = await accountResponse.json();
-        throw new Error(errorData.detail || "Failed to create account");
+        const errorData = await safeJsonParse(accountResponse);
+        throw new Error(errorData.detail || errorData.message || `Failed to create account (${accountResponse.status})`);
       }
 
-      const account = await accountResponse.json();
+      const account = await safeJsonParse(accountResponse);
 
       // Trigger the scan
       const scanResponse = await fetch(`${API_URL}/api/scan`, {
@@ -126,11 +147,11 @@ export default function ScanPage() {
       });
 
       if (!scanResponse.ok) {
-        const errorData = await scanResponse.json();
-        throw new Error(errorData.detail || "Failed to start scan");
+        const errorData = await safeJsonParse(scanResponse);
+        throw new Error(errorData.detail || errorData.message || `Failed to start scan (${scanResponse.status})`);
       }
 
-      const scan = await scanResponse.json();
+      const scan = await safeJsonParse(scanResponse);
 
       toast.success("Scan started successfully!", "Scan Initiated");
       
@@ -142,7 +163,8 @@ export default function ScanPage() {
         router.push(`/dashboard?account_id=${account.id}&scan_id=${scan.scan_id}`);
       }, 500);
     } catch (err: any) {
-      const errorMessage = err.message || "An error occurred";
+      console.error("Scan error:", err);
+      const errorMessage = err.message || "An error occurred while starting the scan";
       setError(errorMessage);
       toast.error(errorMessage, "Scan Failed");
       setLoading(false);
