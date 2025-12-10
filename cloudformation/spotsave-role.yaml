@@ -124,21 +124,23 @@ Resources:
               CloudFormation custom resource handler for SpotSave IAM Role.
               Handles existing roles gracefully by checking if they exist first.
               """
-              print(f"Received event: {json.dumps(event)}")
-              
-              request_type = event['RequestType']
-              role_name = event['ResourceProperties']['RoleName']
-              spotsave_account_id = event['ResourceProperties']['SpotSaveAccountId']
-              external_id_param = event['ResourceProperties'].get('ExternalId', '')
-              managed_policy_arns = event['ResourceProperties'].get('ManagedPolicyArns', [])
-              inline_policy_name = event['ResourceProperties'].get('InlinePolicyName', '')
-              inline_policy_document = event['ResourceProperties'].get('InlinePolicyDocument', {})
-              tags = event['ResourceProperties'].get('Tags', [])
-              
-              response_data = {}
-              ssm = boto3.client('ssm')
-              
+              # Outer try-catch to ensure we ALWAYS send a response
               try:
+                  print(f"Received event: {json.dumps(event)}")
+                  
+                  request_type = event['RequestType']
+                  role_name = event['ResourceProperties']['RoleName']
+                  spotsave_account_id = event['ResourceProperties']['SpotSaveAccountId']
+                  external_id_param = event['ResourceProperties'].get('ExternalId', '')
+                  managed_policy_arns = event['ResourceProperties'].get('ManagedPolicyArns', [])
+                  inline_policy_name = event['ResourceProperties'].get('InlinePolicyName', '')
+                  inline_policy_document = event['ResourceProperties'].get('InlinePolicyDocument', {})
+                  tags = event['ResourceProperties'].get('Tags', [])
+                  
+                  response_data = {}
+                  ssm = boto3.client('ssm')
+                  
+                  try:
                   # Check if role exists
                   role_arn = None
                   try:
@@ -350,22 +352,48 @@ Resources:
                   print(f"Success! Role ARN: {role_arn}, External ID: {external_id}")
                   send(event, context, SUCCESS, response_data)
                   
-              except Exception as e:
-                  error_msg = str(e)
-                  error_trace = traceback.format_exc()
-                  print(f"Error: {error_msg}")
-                  print(f"Traceback: {error_trace}")
-                  response_data['Error'] = error_msg
-                  try:
-                      send(event, context, FAILED, response_data)
-                  except Exception as send_error:
-                      print(f"CRITICAL: Failed to send FAILED response: {send_error}")
-                      # Last resort - try one more time
+                  except Exception as e:
+                      error_msg = str(e)
+                      error_trace = traceback.format_exc()
+                      print(f"Error: {error_msg}")
+                      print(f"Traceback: {error_trace}")
+                      response_data['Error'] = error_msg
                       try:
-                          send(event, context, FAILED, {'Error': 'Failed to send detailed error'})
-                      except:
-                          print("CRITICAL: Could not send any response to CloudFormation")
-                          raise
+                          send(event, context, FAILED, response_data)
+                      except Exception as send_error:
+                          print(f"CRITICAL: Failed to send FAILED response: {send_error}")
+                          # Last resort - try one more time with minimal data
+                          try:
+                              send(event, context, FAILED, {'Error': 'Failed to send detailed error'})
+                          except:
+                              print("CRITICAL: Could not send any response to CloudFormation")
+                              raise
+              except Exception as outer_error:
+                  # Absolute last resort - if even the outer try fails
+                  print(f"FATAL: Outer exception handler: {outer_error}")
+                  print(f"Traceback: {traceback.format_exc()}")
+                  try:
+                      # Try to send a minimal failure response
+                      minimal_response = {
+                          'Status': FAILED,
+                          'Reason': f'Fatal error: {str(outer_error)}',
+                          'PhysicalResourceId': context.log_stream_name if context else 'unknown',
+                          'StackId': event.get('StackId', ''),
+                          'RequestId': event.get('RequestId', ''),
+                          'LogicalResourceId': event.get('LogicalResourceId', ''),
+                          'NoEcho': False,
+                          'Data': {'Error': str(outer_error)}
+                      }
+                      req = urllib.request.Request(
+                          event['ResponseURL'],
+                          data=json.dumps(minimal_response).encode('utf-8'),
+                          method='PUT'
+                      )
+                      urllib.request.urlopen(req, timeout=10)
+                  except:
+                      # If we can't even send a response, Lambda will timeout and CloudFormation will handle it
+                      print("FATAL: Could not send any response - Lambda will timeout")
+                      raise
 
   # Custom resource that uses the Lambda to create/manage the role
   SpotSaveRole:
