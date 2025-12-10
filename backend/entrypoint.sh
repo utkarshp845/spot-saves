@@ -6,12 +6,18 @@ echo "Starting SpotSave backend..."
 mkdir -p /app/data
 chmod 777 /app/data
 
-# Initialize database (don't fail if it already exists)
+# Initialize database - fail fast if there are issues
 echo "Checking database..."
-python -c "from app.database import init_db; init_db()" 2>&1 || echo "Database initialization had issues, but continuing..."
+if ! python -c "from app.database import init_db; init_db()" 2>&1; then
+    echo "ERROR: Database initialization failed!"
+    exit 1
+fi
 
 # Run database migrations if needed
-python -c "from app.database import check_migrations; check_migrations()" 2>&1 || echo "Migrations check had issues, but continuing..."
+if ! python -c "from app.database import check_migrations; check_migrations()" 2>&1; then
+    echo "ERROR: Database migrations failed!"
+    exit 1
+fi
 
 echo "Starting FastAPI server..."
 # Use exec to replace shell process, but catch any startup errors
